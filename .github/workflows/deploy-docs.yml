@@ -28,14 +28,20 @@ jobs:
 
       - name: Prepare docs for MkDocs
         run: |
-          # Sync root-level docs into docs/ to ensure latest content
+          # Copy README as index page
           cp README.md docs/index.md
-          cp CHANGELOG.md docs/changelog.md
 
-          # Fix doc links in index.md: docs/X → X
-          # This converts links like (docs/ai-enhancement.md) to (ai-enhancement.md)
-          # which is required when index.md is moved inside docs/
+          # Copy logo into docs assets
+          mkdir -p docs/assets
+          cp apcore-toolkit-logo.svg docs/assets/
+
+          # Fix links in index.md: docs/X → X (since we're now inside docs/)
+          sed -i 's|\./docs/|./|g' docs/index.md
           sed -i 's|(docs/|(|g' docs/index.md
+
+          # Fix logo reference in index.md
+          sed -i 's|\./apcore-toolkit-logo\.svg|./assets/apcore-toolkit-logo.svg|g' docs/index.md
+
 
       - run: mkdocs build
 

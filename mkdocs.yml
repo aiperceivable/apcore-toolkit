@@ -5,6 +5,8 @@ repo_name: aipartnerup/apcore-toolkit
 
 theme:
   name: material
+  logo: assets/apcore-toolkit-logo.svg
+  favicon: assets/apcore-toolkit-logo.svg
   palette:
     - scheme: default
       primary: deep purple
