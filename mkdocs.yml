@@ -32,7 +32,7 @@ nav:
       - Overview: features/overview.md
       - Smart Scanning: features/scanning.md
       - OpenAPI Integration: features/openapi.md
-      - Pydantic Utilities: features/pydantic.md
+      - Schema Utilities: features/pydantic.md
       - Output Writers: features/output-writers.md
       - Formatting: features/formatting.md
   - AI Enhancement: ai-enhancement.md

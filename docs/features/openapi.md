@@ -24,26 +24,52 @@ This produces the flat `input_schema` required by the `ScannedModule`.
 
 ## Example Usage
 
-```python
-from apcore_toolkit.openapi import extract_input_schema, extract_output_schema
+=== "Python"
 
-# Load an OpenAPI spec
-openapi_spec = { ... }
-# Get an operation object
-operation = openapi_spec["paths"]["/users"]["post"]
+    ```python
+    from apcore_toolkit.openapi import extract_input_schema, extract_output_schema
 
-# Extract metadata
-input_schema = extract_input_schema(operation, openapi_spec)
-output_schema = extract_output_schema(operation, openapi_spec)
+    # Load an OpenAPI spec
+    openapi_spec = { ... }
+    # Get an operation object
+    operation = openapi_spec["paths"]["/users"]["post"]
 
-# Create a ScannedModule
-module = ScannedModule(
-    module_id="users.create",
-    input_schema=input_schema,
-    output_schema=output_schema,
-    # ... other metadata
-)
-```
+    # Extract metadata
+    input_schema = extract_input_schema(operation, openapi_spec)
+    output_schema = extract_output_schema(operation, openapi_spec)
+
+    # Create a ScannedModule
+    module = ScannedModule(
+        module_id="users.create",
+        input_schema=input_schema,
+        output_schema=output_schema,
+        # ... other metadata
+    )
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { extractInputSchema, extractOutputSchema } from "@anthropic/apcore-toolkit/openapi";
+    import { ScannedModule } from "@anthropic/apcore-toolkit";
+
+    // Load an OpenAPI spec
+    const openapiSpec = { ... };
+    // Get an operation object
+    const operation = openapiSpec.paths["/users"].post;
+
+    // Extract metadata
+    const inputSchema = extractInputSchema(operation, openapiSpec);
+    const outputSchema = extractOutputSchema(operation, openapiSpec);
+
+    // Create a ScannedModule
+    const module = new ScannedModule({
+      moduleId: "users.create",
+      inputSchema,
+      outputSchema,
+      // ... other metadata
+    });
+    ```
 
 ## Reference Resolution
 

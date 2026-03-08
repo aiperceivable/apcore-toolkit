@@ -4,16 +4,31 @@ This guide walks you through installing **apcore-toolkit** and using its core mo
 
 ## Prerequisites
 
-- **Python**: 3.11+
-- **apcore**: 0.9.0+
+=== "Python"
+
+    - **Python**: 3.11+
+    - **apcore**: 0.9.0+
+
+=== "TypeScript"
+
+    - **Node.js**: 18+
+    - **apcore**: 0.9.0+
 
 ---
 
 ## Installation
 
-```bash
-pip install apcore-toolkit
-```
+=== "Python"
+
+    ```bash
+    pip install apcore-toolkit
+    ```
+
+=== "TypeScript"
+
+    ```bash
+    npm install @anthropic/apcore-toolkit
+    ```
 
 ---
 
@@ -21,29 +36,60 @@ pip install apcore-toolkit
 
 The `BaseScanner` provides the foundation for extracting metadata from any framework.
 
-```python
-from apcore_toolkit import BaseScanner, ScannedModule
+=== "Python"
 
-class MyScanner(BaseScanner):
-    def scan(self, **kwargs):
-        # Scan your framework endpoints and return ScannedModule instances
+    ```python
+    from apcore_toolkit import BaseScanner, ScannedModule
+
+    class MyScanner(BaseScanner):
+        def scan(self, **kwargs):
+            # Scan your framework endpoints and return ScannedModule instances
+            return [
+                ScannedModule(
+                    module_id="users.get_user",
+                    description="Get a user by ID",
+                    input_schema={"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
+                    output_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+                    tags=["users"],
+                    target="myapp.views:get_user",
+                )
+            ]
+
+        def get_source_name(self):
+            return "my-framework"
+
+    scanner = MyScanner()
+    modules = scanner.scan()
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { BaseScanner, ScannedModule } from "@anthropic/apcore-toolkit";
+
+    class MyScanner extends BaseScanner {
+      scan(): ScannedModule[] {
+        // Scan your framework endpoints and return ScannedModule instances
         return [
-            ScannedModule(
-                module_id="users.get_user",
-                description="Get a user by ID",
-                input_schema={"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]},
-                output_schema={"type": "object", "properties": {"name": {"type": "string"}}},
-                tags=["users"],
-                target="myapp.views:get_user",
-            )
-        ]
+          new ScannedModule({
+            moduleId: "users.get_user",
+            description: "Get a user by ID",
+            inputSchema: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
+            outputSchema: { type: "object", properties: { name: { type: "string" } } },
+            tags: ["users"],
+            target: "myapp/views:get_user",
+          }),
+        ];
+      }
 
-    def get_source_name(self):
-        return "my-framework"
+      getSourceName(): string {
+        return "my-framework";
+      }
+    }
 
-scanner = MyScanner()
-modules = scanner.scan()
-```
+    const scanner = new MyScanner();
+    const modules = scanner.scan();
+    ```
 
 ---
 
@@ -51,13 +97,25 @@ modules = scanner.scan()
 
 Use built-in utilities to refine your scanned modules.
 
-```python
-# Filter modules by ID using regex
-modules = scanner.filter_modules(modules, include=r"^users\.")
+=== "Python"
 
-# Ensure all module IDs are unique
-modules = scanner.deduplicate_ids(modules)
-```
+    ```python
+    # Filter modules by ID using regex
+    modules = scanner.filter_modules(modules, include=r"^users\.")
+
+    # Ensure all module IDs are unique
+    modules = scanner.deduplicate_ids(modules)
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    // Filter modules by ID using regex
+    modules = scanner.filterModules(modules, { include: /^users\./ });
+
+    // Ensure all module IDs are unique
+    modules = scanner.deduplicateIds(modules);
+    ```
 
 ---
 
@@ -69,67 +127,127 @@ Choose the output format that fits your workflow.
 
 Generates `.binding.yaml` files for `apcore.BindingLoader`.
 
-```python
-from apcore_toolkit import YAMLWriter
+=== "Python"
 
-writer = YAMLWriter()
-writer.write(modules, output_dir="./bindings")
-```
+    ```python
+    from apcore_toolkit import YAMLWriter
 
-### Option B: Python Wrappers
+    writer = YAMLWriter()
+    writer.write(modules, output_dir="./bindings")
+    ```
 
-Generates `@module`-decorated Python wrapper files.
+=== "TypeScript"
 
-```python
-from apcore_toolkit import PythonWriter
+    ```typescript
+    import { YAMLWriter } from "@anthropic/apcore-toolkit";
 
-writer = PythonWriter()
-writer.write(modules, output_dir="./generated")
-```
+    const writer = new YAMLWriter();
+    writer.write(modules, { outputDir: "./bindings" });
+    ```
+
+### Option B: Python / TypeScript Wrappers
+
+Generates decorator-based wrapper files for your language.
+
+=== "Python"
+
+    ```python
+    from apcore_toolkit import PythonWriter
+
+    writer = PythonWriter()
+    writer.write(modules, output_dir="./generated")
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { TypeScriptWriter } from "@anthropic/apcore-toolkit";
+
+    const writer = new TypeScriptWriter();
+    writer.write(modules, { outputDir: "./generated" });
+    ```
 
 ### Option C: Direct Registration
 
 Registers modules directly into an active `apcore.Registry`.
 
-```python
-from apcore import Registry
-from apcore_toolkit import RegistryWriter
+=== "Python"
 
-registry = Registry()
-writer = RegistryWriter()
-writer.write(modules, registry)
-```
+    ```python
+    from apcore import Registry
+    from apcore_toolkit import RegistryWriter
+
+    registry = Registry()
+    writer = RegistryWriter()
+    writer.write(modules, registry)
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { Registry } from "@anthropic/apcore";
+    import { RegistryWriter } from "@anthropic/apcore-toolkit";
+
+    const registry = new Registry();
+    const writer = new RegistryWriter();
+    writer.write(modules, registry);
+    ```
 
 ---
 
 ## Step 4: Use Schema Utilities
 
-`apcore-toolkit` includes powerful utilities for working with Pydantic and OpenAPI schemas.
+`apcore-toolkit` includes powerful utilities for working with schemas.
 
-### Pydantic Model Flattening
+### Model Flattening
 
-Flatten complex Pydantic models into scalar keyword arguments, perfect for MCP (Model Context Protocol) tools.
+Flatten complex models into scalar keyword arguments, perfect for MCP (Model Context Protocol) tools.
 
-```python
-from apcore_toolkit import flatten_pydantic_params, resolve_target
+=== "Python"
 
-# Resolve a target string to a callable
-func = resolve_target("myapp.views:create_task")
+    ```python
+    from apcore_toolkit import flatten_pydantic_params, resolve_target
 
-# Wrap the function to accept flat kwargs
-wrapped = flatten_pydantic_params(func)
-```
+    # Resolve a target string to a callable
+    func = resolve_target("myapp.views:create_task")
+
+    # Wrap the function to accept flat kwargs
+    wrapped = flatten_pydantic_params(func)
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { flattenParams, resolveTarget } from "@anthropic/apcore-toolkit";
+
+    // Resolve a target string to a callable
+    const func = resolveTarget("myapp/views:createTask");
+
+    // Wrap the function to accept flat kwargs
+    const wrapped = flattenParams(func);
+    ```
 
 ### OpenAPI Extraction
 
 Extract JSON Schemas directly from OpenAPI operation objects.
 
-```python
-from apcore_toolkit.openapi import extract_input_schema, extract_output_schema
+=== "Python"
 
-input_schema = extract_input_schema(operation, openapi_doc)
-output_schema = extract_output_schema(operation, openapi_doc)
-```
+    ```python
+    from apcore_toolkit.openapi import extract_input_schema, extract_output_schema
+
+    input_schema = extract_input_schema(operation, openapi_doc)
+    output_schema = extract_output_schema(operation, openapi_doc)
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { extractInputSchema, extractOutputSchema } from "@anthropic/apcore-toolkit/openapi";
+
+    const inputSchema = extractInputSchema(operation, openapiDoc);
+    const outputSchema = extractOutputSchema(operation, openapiDoc);
+    ```
 
 ---
 

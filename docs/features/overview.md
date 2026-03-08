@@ -1,6 +1,6 @@
 # Features Overview
 
-`apcore-toolkit` is a collection of framework-agnostic utilities designed to help you extract, refine, and export metadata from your existing codebase, making it "AI-Perceivable".
+`apcore-toolkit` is a collection of framework-agnostic utilities designed to help you extract, refine, and export metadata from your existing codebase, making it "AI-Perceivable". Available for both **Python** and **TypeScript**.
 
 ## Core Capabilities
 
@@ -8,7 +8,7 @@
 |---------|-------------|
 | **[Smart Scanning](scanning.md)** | Abstract base classes and utilities for framework-specific scanners. |
 | **[OpenAPI Integration](openapi.md)** | Extract JSON Schemas directly from OpenAPI operation objects. |
-| **[Pydantic Utilities](pydantic.md)** | Flatten complex Pydantic models for easier AI interaction. |
+| **[Schema Utilities](pydantic.md)** | Flatten complex models (Pydantic / Zod) for easier AI interaction. |
 | **[Output Writers](output-writers.md)** | Export metadata to YAML bindings, Python wrappers, or direct Registry registration. |
 | **[Formatting](formatting.md)** | Convert data structures into beautiful, human-readable Markdown. |
 | **[AI Enhancement](../ai-enhancement.md)** | Use local SLMs to automatically fill in missing metadata. |

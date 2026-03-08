@@ -17,35 +17,71 @@ The `BaseScanner` ABC (Abstract Base Class) provides a consistent interface and 
 
 When implementing a custom scanner, you inherit from `BaseScanner`:
 
-```python
-from apcore_toolkit import BaseScanner, ScannedModule
+=== "Python"
 
-class MyScanner(BaseScanner):
-    def scan(self, **kwargs) -> list[ScannedModule]:
-        # 1. Discover endpoints from your framework
-        endpoints = self.get_my_endpoints()
+    ```python
+    from apcore_toolkit import BaseScanner, ScannedModule
 
-        # 2. Convert endpoints to ScannedModules
-        modules = []
-        for e in endpoints:
-            desc, docs, params = self.extract_docstring(e.view_func)
-            modules.append(ScannedModule(
-                module_id=e.name,
-                description=desc,
-                target=f"{e.module}:{e.func_name}",
-                annotations=self.infer_annotations_from_method(e.method),
-                # ... other metadata
-            ))
-        
-        # 3. Apply shared refining utilities
-        modules = self.filter_modules(modules, include=kwargs.get("include"))
-        modules = self.deduplicate_ids(modules)
+    class MyScanner(BaseScanner):
+        def scan(self, **kwargs) -> list[ScannedModule]:
+            # 1. Discover endpoints from your framework
+            endpoints = self.get_my_endpoints()
 
-        return modules
+            # 2. Convert endpoints to ScannedModules
+            modules = []
+            for e in endpoints:
+                desc, docs, params = self.extract_docstring(e.view_func)
+                modules.append(ScannedModule(
+                    module_id=e.name,
+                    description=desc,
+                    target=f"{e.module}:{e.func_name}",
+                    annotations=self.infer_annotations_from_method(e.method),
+                    # ... other metadata
+                ))
 
-    def get_source_name(self) -> str:
-        return "my-framework-scanner"
-```
+            # 3. Apply shared refining utilities
+            modules = self.filter_modules(modules, include=kwargs.get("include"))
+            modules = self.deduplicate_ids(modules)
+
+            return modules
+
+        def get_source_name(self) -> str:
+            return "my-framework-scanner"
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { BaseScanner, ScannedModule } from "@anthropic/apcore-toolkit";
+
+    class MyScanner extends BaseScanner {
+      scan(options?: { include?: RegExp }): ScannedModule[] {
+        // 1. Discover endpoints from your framework
+        const endpoints = this.getMyEndpoints();
+
+        // 2. Convert endpoints to ScannedModules
+        let modules = endpoints.map((e) =>
+          new ScannedModule({
+            moduleId: e.name,
+            description: this.extractDocstring(e.viewFunc).description,
+            target: `${e.module}:${e.funcName}`,
+            annotations: this.inferAnnotationsFromMethod(e.method),
+            // ... other metadata
+          })
+        );
+
+        // 3. Apply shared refining utilities
+        modules = this.filterModules(modules, { include: options?.include });
+        modules = this.deduplicateIds(modules);
+
+        return modules;
+      }
+
+      getSourceName(): string {
+        return "my-framework-scanner";
+      }
+    }
+    ```
 
 ## Module Deduplication
 
