@@ -263,7 +263,7 @@ Enhance your metadata using local Small Language Models (SLMs).
    ```
 3. **Run your scanner**: Missing descriptions and documentation will be automatically inferred.
 
-See the [AI Enhancement Guide](AI_ENHANCEMENT.md) for more details.
+See the [AI Enhancement Guide](ai-enhancement.md) for more details.
 
 ---
 

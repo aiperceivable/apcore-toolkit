@@ -28,6 +28,7 @@ theme:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
+  - Scope & Boundaries: scope.md
   - Features:
       - Overview: features/overview.md
       - Smart Scanning: features/scanning.md

@@ -86,6 +86,65 @@ Directly registers the scanned modules into an active `apcore.Registry` instance
     writer.write(modules, registry);
     ```
 
+## Output Verification
+
+Writers can optionally **verify** that their output artifacts are well-formed after writing. This prevents silent failures where a writer produces a file that apcore cannot load.
+
+### Verification by Writer Type
+
+| Writer | Verification Checks |
+|--------|-------------------|
+| `YAMLWriter` | File exists, YAML parses without error, contains required `module_id` and `target` fields |
+| `PythonWriter` / `TypeScriptWriter` | File exists, source code parses without syntax errors (AST/TS compiler check) |
+| `RegistryWriter` | Module ID is registered, `registry.get(module_id)` returns a valid module |
+
+### Usage
+
+Verification is enabled via the `verify` parameter:
+
+=== "Python"
+
+    ```python
+    from apcore_toolkit import YAMLWriter
+
+    writer = YAMLWriter()
+    results = writer.write(modules, output_dir="./bindings", verify=True)
+
+    # results contains verification status per module
+    for r in results:
+        if not r.verified:
+            print(f"WARNING: {r.module_id} — {r.verification_error}")
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { YAMLWriter } from "apcore-toolkit";
+
+    const writer = new YAMLWriter();
+    const results = writer.write(modules, { outputDir: "./bindings", verify: true });
+
+    for (const r of results) {
+      if (!r.verified) {
+        console.warn(`WARNING: ${r.moduleId} — ${r.verificationError}`);
+      }
+    }
+    ```
+
+### Verification Result
+
+Each write operation returns a list of `WriteResult` objects:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `module_id` | `str` | The module that was written |
+| `path` | `str \| None` | Output file path (None for RegistryWriter) |
+| `verified` | `bool` | Whether verification passed (always `True` if `verify=False`) |
+| `verification_error` | `str \| None` | Error message if verification failed |
+
+!!! tip "Use in CI"
+    Enable verification in CI pipelines to catch binding generation issues before deployment. A scan → write → verify cycle ensures that generated artifacts are always loadable by apcore.
+
 ## Choosing a Writer
 
 | Use Case | Recommended Writer |

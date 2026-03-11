@@ -13,6 +13,69 @@ The `BaseScanner` ABC (Abstract Base Class) provides a consistent interface and 
 | `infer_annotations(...)` | Infer `readonly`, `destructive`, or `idempotent` from HTTP methods. |
 | `deduplicate_ids(...)` | Automatically resolve duplicate module IDs by appending suffixes (`_2`, `_3`). |
 
+## Ability Extraction Methodology
+
+When building a scanner for a new framework, follow this systematic approach to ensure comprehensive metadata extraction. This methodology is adapted from real-world experience scanning 10+ software systems.
+
+### Phase 1: Identify the Backend Engine
+
+Separate the framework's **routing/dispatch layer** from its **business logic layer**. The scanner should target the dispatch layer to discover endpoints, then reach into the business logic layer for metadata.
+
+| Framework | Dispatch Layer | Business Logic |
+|-----------|---------------|----------------|
+| Django REST | `urlpatterns` + `ViewSet` | serializer methods, queryset logic |
+| Flask | `@app.route` + Blueprints | view function body |
+| FastAPI | `@router.get/post` | endpoint function with type hints |
+| Express | `router.get/post` | handler functions |
+| NestJS | `@Controller` + `@Get/@Post` | service methods |
+
+### Phase 2: Map Operations to Modules
+
+For each discovered endpoint, extract the canonical mapping:
+
+```
+Framework endpoint  →  ScannedModule
+─────────────────     ─────────────
+route path            module_id
+handler function      target
+request schema        input_schema
+response schema       output_schema
+docstring             description + documentation
+```
+
+### Phase 3: Extract Data Models
+
+Leverage the framework's native schema system:
+
+- **Python**: Pydantic models, Django serializers, marshmallow schemas
+- **TypeScript**: Zod schemas, class-validator decorators, interfaces
+
+Use the toolkit's `flatten_pydantic_params()` or `flattenParams()` to convert nested models into flat schemas when needed.
+
+### Phase 4: Discover Existing API Contracts
+
+Check for existing machine-readable API definitions that can supplement or replace code scanning:
+
+- OpenAPI/Swagger specs (use `extract_input_schema()` / `extract_output_schema()`)
+- GraphQL schemas
+- gRPC/Protobuf definitions
+- Existing MCP server manifests
+
+### Phase 5: Infer Behavioral Annotations
+
+Go beyond HTTP method heuristics. Analyze the function body for behavioral signals:
+
+| Signal in Code | Inferred Annotation |
+|---------------|-------------------|
+| `DELETE` method, `.delete()` calls, `DROP` SQL | `destructive=True` |
+| `GET` method, no DB writes, pure computation | `readonly=True` |
+| `PUT` method, upsert patterns | `idempotent=True` |
+| Sends email/SMS, processes payment, modifies permissions | `requires_approval=True` |
+| HTTP client calls, file I/O, subprocess | `open_world=True` |
+| `yield`, `StreamingResponse`, `async for` | `streaming=True` |
+
+Static analysis can detect some of these patterns. For ambiguous cases, the [AI Enhancement](../ai-enhancement.md) module can assist with SLM-based inference.
+
 ## Implementation Example
 
 When implementing a custom scanner, you inherit from `BaseScanner`:
@@ -93,7 +156,9 @@ Scanners often encounter naming collisions (e.g., `GET /users` and `POST /users`
 ## Behavioral Inference
 
 `infer_annotations_from_method()` provides a sensible default for mapping HTTP verbs to apcore's `ModuleAnnotations`:
-- `GET` $\rightarrow$ `readonly=True`
-- `DELETE` $\rightarrow$ `destructive=True`
-- `PUT` $\rightarrow$ `idempotent=True`
-- Others $\rightarrow$ Default (all False)
+- `GET` → `readonly=True`
+- `DELETE` → `destructive=True`
+- `PUT` → `idempotent=True`
+- Others → Default (all False)
+
+For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer-behavioral-annotations) above and the [AI Enhancement](../ai-enhancement.md) module.
