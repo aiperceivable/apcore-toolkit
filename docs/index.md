@@ -18,8 +18,13 @@ pip install apcore-toolkit
 | `BaseScanner` | Abstract base class for framework scanners with filtering and deduplication |
 | `YAMLWriter` | Generates `.binding.yaml` files for `apcore.BindingLoader` |
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
+| `TypeScriptWriter` | Generates `@module`-decorated TypeScript wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |
 | `to_markdown` | Converts arbitrary dicts to Markdown with depth control and table heuristics |
+| `AIEnhancer` | SLM-based metadata enrichment for missing descriptions and schemas |
+| `WriteResult` | Dataclass representing the outcome of a writer operation |
+| `WriteError` | Exception raised when a writer fails due to I/O or other errors |
+| `Verifier` / `VerifyResult` | Protocol and result type for pluggable output verification |
 
 ## Usage
 
@@ -73,9 +78,10 @@ writer.write(modules, registry)
 ```python
 from apcore_toolkit.output import get_writer
 
-writer = get_writer("yaml")    # YAMLWriter
-writer = get_writer("python")  # PythonWriter
-writer = get_writer("registry")  # RegistryWriter
+writer = get_writer("yaml")        # YAMLWriter
+writer = get_writer("python")      # PythonWriter
+writer = get_writer("typescript")  # TypeScriptWriter
+writer = get_writer("registry")    # RegistryWriter
 ```
 
 ### Pydantic Model Flattening
@@ -118,7 +124,7 @@ md = to_markdown({"name": "Alice", "role": "admin"}, title="User Info")
 ## Requirements
 
 - Python >= 3.11
-- apcore >= 0.9.0
+- apcore >= 0.13.0
 - pydantic >= 2.0
 - PyYAML >= 6.0
 

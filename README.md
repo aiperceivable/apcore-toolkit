@@ -27,7 +27,7 @@
 ```bash
 pip install apcore-toolkit
 ```
-Requires Python 3.11+ and apcore 0.9.0+.
+Requires Python 3.11+ and apcore 0.13.0+.
 
 ---
 
@@ -39,8 +39,13 @@ Requires Python 3.11+ and apcore 0.9.0+.
 | `BaseScanner` | Abstract base class for framework scanners |
 | `YAMLWriter` | Generates `.binding.yaml` files for `apcore.BindingLoader` |
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
+| `TypeScriptWriter` | Generates `@module`-decorated TypeScript wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |
-| `to_markdown` | Converts arbitrary dicts to Markdown with depth control |
+| `to_markdown` | Converts arbitrary dicts to Markdown with depth control and table heuristics |
+| `AIEnhancer` | SLM-based metadata enrichment for missing descriptions and schemas |
+| `WriteResult` | Dataclass representing the outcome of a writer operation |
+| `WriteError` | Exception raised when a writer fails due to I/O or other errors |
+| `Verifier` / `VerifyResult` | Protocol and result type for pluggable output verification |
 
 ---
 

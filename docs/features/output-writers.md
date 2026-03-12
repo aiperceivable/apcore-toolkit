@@ -17,7 +17,7 @@ Generates individual `.binding.yaml` files for each scanned module. These files 
     from apcore_toolkit import YAMLWriter
 
     writer = YAMLWriter()
-    writer.write(modules, output_dir="./bindings")
+    writer.write(modules, output_dir="./bindings", dry_run=False)
     ```
 
 === "TypeScript"
@@ -26,7 +26,7 @@ Generates individual `.binding.yaml` files for each scanned module. These files 
     import { YAMLWriter } from "apcore-toolkit";
 
     const writer = new YAMLWriter();
-    writer.write(modules, { outputDir: "./bindings" });
+    writer.write(modules, { outputDir: "./bindings", dryRun: false });
     ```
 
 ## `PythonWriter` / `TypeScriptWriter`
@@ -44,7 +44,7 @@ Generates source files containing decorator-based wrapper functions. This is use
     from apcore_toolkit import PythonWriter
 
     writer = PythonWriter()
-    writer.write(modules, output_dir="./generated_apcore")
+    writer.write(modules, output_dir="./generated_apcore", dry_run=False)
     ```
 
 === "TypeScript"
@@ -53,7 +53,7 @@ Generates source files containing decorator-based wrapper functions. This is use
     import { TypeScriptWriter } from "apcore-toolkit";
 
     const writer = new TypeScriptWriter();
-    writer.write(modules, { outputDir: "./generated_apcore" });
+    writer.write(modules, { outputDir: "./generated_apcore", dryRun: false });
     ```
 
 ## `RegistryWriter`
@@ -72,7 +72,7 @@ Directly registers the scanned modules into an active `apcore.Registry` instance
 
     registry = Registry()
     writer = RegistryWriter()
-    writer.write(modules, registry)
+    writer.write(modules, registry, dry_run=False)
     ```
 
 === "TypeScript"
@@ -83,8 +83,43 @@ Directly registers the scanned modules into an active `apcore.Registry` instance
 
     const registry = new Registry();
     const writer = new RegistryWriter();
-    writer.write(modules, registry);
+    writer.write(modules, registry, { dryRun: false });
     ```
+
+## `get_writer()` Factory
+
+The `get_writer(format)` factory function returns the appropriate writer instance for a given output format, avoiding the need to import each writer class individually.
+
+### Supported Formats
+
+| Format | Returns |
+|--------|---------|
+| `"yaml"` | `YAMLWriter` instance |
+| `"python"` | `PythonWriter` instance |
+| `"typescript"` | `TypeScriptWriter` instance |
+| `"registry"` | `RegistryWriter` instance |
+
+=== "Python"
+
+    ```python
+    from apcore_toolkit.output import get_writer
+
+    writer = get_writer("yaml")       # YAMLWriter
+    writer = get_writer("python")     # PythonWriter
+    writer = get_writer("registry")   # RegistryWriter
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { getWriter } from "apcore-toolkit";
+
+    const writer = getWriter("yaml");       // YAMLWriter
+    const writer = getWriter("typescript"); // TypeScriptWriter
+    const writer = getWriter("registry");   // RegistryWriter
+    ```
+
+---
 
 ## Output Verification
 
@@ -100,15 +135,24 @@ Writers can optionally **verify** that their output artifacts are well-formed af
 
 ### Usage
 
-Verification is enabled via the `verify` parameter:
+Verification is enabled via the `verify` parameter. All writers support `verify` and `verifiers`:
 
 === "Python"
 
     ```python
-    from apcore_toolkit import YAMLWriter
+    from apcore_toolkit import YAMLWriter, PythonWriter, RegistryWriter
 
+    # YAMLWriter
     writer = YAMLWriter()
-    results = writer.write(modules, output_dir="./bindings", verify=True)
+    results = writer.write(modules, output_dir="./bindings", verify=True, verifiers=[])
+
+    # PythonWriter
+    writer = PythonWriter()
+    results = writer.write(modules, output_dir="./generated", verify=True, verifiers=[])
+
+    # RegistryWriter
+    writer = RegistryWriter()
+    results = writer.write(modules, registry, verify=True, verifiers=[])
 
     # results contains verification status per module
     for r in results:
@@ -119,12 +163,21 @@ Verification is enabled via the `verify` parameter:
 === "TypeScript"
 
     ```typescript
-    import { YAMLWriter } from "apcore-toolkit";
+    import { YAMLWriter, TypeScriptWriter, RegistryWriter } from "apcore-toolkit";
 
-    const writer = new YAMLWriter();
-    const results = writer.write(modules, { outputDir: "./bindings", verify: true });
+    // YAMLWriter
+    const yamlWriter = new YAMLWriter();
+    const results1 = yamlWriter.write(modules, { outputDir: "./bindings", verify: true, verifiers: [] });
 
-    for (const r of results) {
+    // TypeScriptWriter
+    const tsWriter = new TypeScriptWriter();
+    const results2 = tsWriter.write(modules, { outputDir: "./generated", verify: true, verifiers: [] });
+
+    // RegistryWriter
+    const regWriter = new RegistryWriter();
+    const results3 = regWriter.write(modules, registry, { verify: true, verifiers: [] });
+
+    for (const r of results1) {
       if (!r.verified) {
         console.warn(`WARNING: ${r.moduleId} — ${r.verificationError}`);
       }
@@ -135,12 +188,12 @@ Verification is enabled via the `verify` parameter:
 
 Each write operation returns a list of `WriteResult` objects:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `module_id` | `str` | The module that was written |
-| `path` | `str \| None` | Output file path (None for RegistryWriter) |
-| `verified` | `bool` | Whether verification passed (always `True` if `verify=False`) |
-| `verification_error` | `str \| None` | Error message if verification failed |
+| Field (Python / TypeScript) | Python Type | TypeScript Type | Description |
+|-----------------------------|------------|-----------------|-------------|
+| `module_id` / `moduleId` | `str` | `string` | The module that was written |
+| `path` | `str \| None` | `string \| null` | Output file path (None/null for RegistryWriter) |
+| `verified` | `bool` | `boolean` | Whether verification passed (always `True` if `verify=False`) |
+| `verification_error` / `verificationError` | `str \| None` | `string \| null` | Error message if verification failed |
 
 !!! tip "Use in CI"
     Enable verification in CI pipelines to catch binding generation issues before deployment. A scan → write → verify cycle ensures that generated artifacts are always loadable by apcore.

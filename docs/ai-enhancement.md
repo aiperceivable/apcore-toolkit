@@ -7,7 +7,7 @@ This document specifies how `apcore-toolkit` uses Small Language Models (SLMs) t
 The toolkit's primary mission is to make existing code "AI-Perceivable". While static analysis (regex, AST, type hints) is efficient, it often fails to:
 
 - Generate meaningful `description` and `documentation` for legacy code with no docstrings.
-- Create effective `ai_guidance` for complex error handling paths.
+- Create effective guidance (stored in `metadata.ai_guidance`) for complex error handling paths.
 - Infer `input_schema` for functions using `*args` or `**kwargs`.
 - Determine behavioral `annotations` (e.g., is this function destructive?) from code logic.
 
@@ -74,6 +74,11 @@ This is where the SLM adds the most value — inferring behavioral semantics tha
 | `requires_approval` | Sends money, deletes accounts, modifies permissions |
 | `open_world` | HTTP calls, file I/O, database queries, subprocess calls |
 | `streaming` | Yields/iterates results incrementally |
+| `cacheable` | Deterministic output for given inputs, no side effects |
+| `cache_ttl` | Expected data freshness window (seconds, 0 = no expiry) |
+| `cache_key_fields` | Subset of input fields that uniquely identify cached results |
+| `paginated` | Returns partial result sets, supports continuation |
+| `pagination_style` | `"cursor"`, `"offset"`, or `"page"` strategy |
 
 **Acceptance rule**: Only apply an annotation if the SLM's confidence ≥ `APCORE_AI_THRESHOLD`. Otherwise, leave as default and add a warning to `ScannedModule.warnings`.
 

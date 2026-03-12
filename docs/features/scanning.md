@@ -10,7 +10,7 @@ The `BaseScanner` ABC (Abstract Base Class) provides a consistent interface and 
 | `get_source_name()` | **Abstract.** Returns the scanner's name (e.g., "django-ninja"). |
 | `extract_docstring(func)` | Convenience wrapper around `apcore.parse_docstring()`. |
 | `filter_modules(...)` | Apply regex-based include/exclude filters to module IDs. |
-| `infer_annotations(...)` | Infer `readonly`, `destructive`, or `idempotent` from HTTP methods. |
+| `infer_annotations_from_method(...)` | Infer `readonly`, `destructive`, or `idempotent` from HTTP methods. |
 | `deduplicate_ids(...)` | Automatically resolve duplicate module IDs by appending suffixes (`_2`, `_3`). |
 
 ## Ability Extraction Methodology
@@ -41,7 +41,27 @@ handler function      target
 request schema        input_schema
 response schema       output_schema
 docstring             description + documentation
+(default)             version       (default: "1.0.0")
+usage samples         examples      (default: [])
+extra data            metadata      (default: {})
 ```
+
+### `ScannedModule` Fields
+
+| Field | Python Type | TypeScript Type | Default |
+|-------|------------|-----------------|---------|
+| `module_id` / `moduleId` | `str` | `string` | *(required)* |
+| `description` | `str` | `string` | *(required)* |
+| `target` | `str` | `string` | *(required)* |
+| `input_schema` / `inputSchema` | `dict` | `Record<string, unknown>` | *(required)* |
+| `output_schema` / `outputSchema` | `dict` | `Record<string, unknown>` | *(required)* |
+| `tags` | `list[str]` | `string[]` | `[]` |
+| `annotations` | `ModuleAnnotations` | `ModuleAnnotations` | `ModuleAnnotations()` |
+| `version` | `str` | `string` | `"1.0.0"` |
+| `examples` | `list[ModuleExample]` | `ModuleExample[]` | `[]` |
+| `metadata` | `dict` | `Record<string, unknown>` | `{}` |
+| `documentation` | `str` | `string` | `None` / `null` |
+| `warnings` | `list[str]` | `string[]` | `[]` |
 
 ### Phase 3: Extract Data Models
 
@@ -73,6 +93,8 @@ Go beyond HTTP method heuristics. Analyze the function body for behavioral signa
 | Sends email/SMS, processes payment, modifies permissions | `requires_approval=True` |
 | HTTP client calls, file I/O, subprocess | `open_world=True` |
 | `yield`, `StreamingResponse`, `async for` | `streaming=True` |
+| `GET` with stable results, no auth-dependent data | `cacheable=True` |
+| `Paginator`, `LIMIT/OFFSET`, cursor tokens | `paginated=True` |
 
 Static analysis can detect some of these patterns. For ambiguous cases, the [AI Enhancement](../ai-enhancement.md) module can assist with SLM-based inference.
 
@@ -156,9 +178,18 @@ Scanners often encounter naming collisions (e.g., `GET /users` and `POST /users`
 ## Behavioral Inference
 
 `infer_annotations_from_method()` provides a sensible default for mapping HTTP verbs to apcore's `ModuleAnnotations`:
-- `GET` → `readonly=True`
+- `GET` → `readonly=True, cacheable=True`
 - `DELETE` → `destructive=True`
 - `PUT` → `idempotent=True`
 - Others → Default (all False)
 
 For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer-behavioral-annotations) above and the [AI Enhancement](../ai-enhancement.md) module.
+
+## Serialization Utilities
+
+Two helper functions convert apcore objects to plain dictionaries for JSON/YAML serialization:
+
+| Function (Python / TypeScript) | Description |
+|-------------------------------|-------------|
+| `annotations_to_dict()` / `annotationsToDict()` | Converts a `ModuleAnnotations` instance to a plain dict with snake_case keys |
+| `module_to_dict()` / `moduleToDict()` | Converts a `ScannedModule` to a dict with snake_case keys, suitable for YAML/JSON output |
