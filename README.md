@@ -54,7 +54,7 @@ Requires Python 3.11+ and apcore 0.13.0+.
 - **[Getting Started Guide](docs/getting-started.md)** — Installation and core usage
 - **[Features Overview](docs/features/overview.md)** — Detailed look at toolkit capabilities
 - **[AI Enhancement Guide](docs/ai-enhancement.md)** — Metadata enrichment strategy
-- **[Changelog](docs/changelog.md)**
+- **[Changelog](CHANGELOG.md)**
 
 ---
 

@@ -26,7 +26,7 @@ Generates individual `.binding.yaml` files for each scanned module. These files 
     import { YAMLWriter } from "apcore-toolkit";
 
     const writer = new YAMLWriter();
-    writer.write(modules, { outputDir: "./bindings", dryRun: false });
+    writer.write(modules, "./bindings", { dryRun: false });
     ```
 
 ## `PythonWriter` / `TypeScriptWriter`
@@ -53,7 +53,7 @@ Generates source files containing decorator-based wrapper functions. This is use
     import { TypeScriptWriter } from "apcore-toolkit";
 
     const writer = new TypeScriptWriter();
-    writer.write(modules, { outputDir: "./generated_apcore", dryRun: false });
+    writer.write(modules, "./generated_apcore", { dryRun: false });
     ```
 
 ## `RegistryWriter`
@@ -78,7 +78,7 @@ Directly registers the scanned modules into an active `apcore.Registry` instance
 === "TypeScript"
 
     ```typescript
-    import { Registry } from "@anthropic/apcore";
+    import { Registry } from "apcore-js";
     import { RegistryWriter } from "apcore-toolkit";
 
     const registry = new Registry();
@@ -167,11 +167,11 @@ Verification is enabled via the `verify` parameter. All writers support `verify`
 
     // YAMLWriter
     const yamlWriter = new YAMLWriter();
-    const results1 = yamlWriter.write(modules, { outputDir: "./bindings", verify: true, verifiers: [] });
+    const results1 = yamlWriter.write(modules, "./bindings", { verify: true, verifiers: [] });
 
     // TypeScriptWriter
     const tsWriter = new TypeScriptWriter();
-    const results2 = tsWriter.write(modules, { outputDir: "./generated", verify: true, verifiers: [] });
+    const results2 = tsWriter.write(modules, "./generated", { verify: true, verifiers: [] });
 
     // RegistryWriter
     const regWriter = new RegistryWriter();

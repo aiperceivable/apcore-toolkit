@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - `TypeScriptWriter` to Core Modules tables in README and docs index
-- `"typescript"` format to `get_writer()` factory example
+- `"typescript"` format to `get_writer()` factory example (TypeScript only)
 - `documentation` and `warnings` fields to `ScannedModule` Fields table
 - Serialization Utilities section (`annotationsToDict`, `moduleToDict`)
   in Smart Scanning docs
@@ -18,6 +18,21 @@ All notable changes to this project will be documented in this file.
 - Updated `WriteResult` table in Output Writers docs with TypeScript naming
   and type columns
 - Fixed `ai_guidance` → `metadata.ai_guidance` in AI Enhancement docs
+- TypeScript examples: replaced `new ScannedModule({...})` with
+  `createScannedModule({...})` (`ScannedModule` is an interface, not a class)
+- TypeScript `YAMLWriter` and `TypeScriptWriter` `write()` call signatures
+  corrected from `write(modules, { outputDir })` to `write(modules, outputDir, options?)`
+- `filterModules` include pattern corrected from `RegExp` literal to `string`
+  matching the actual TypeScript signature
+- `resolveTarget` example now shows `await` (the function is async)
+- `flattenParams` example now shows required `zodSchema` second argument
+- OpenAPI import corrected from `"apcore-toolkit/openapi"` to `"apcore-toolkit"`
+  (no sub-path export in TypeScript)
+- TypeScript Registry import corrected from `"@anthropic/apcore"` to `"apcore-js"`
+- Broken changelog links fixed (`docs/changelog.md` → root `CHANGELOG.md`)
+- `docs/features/scanning.md` — TypeScript example `include` option type
+  corrected to `string`, import updated
+- `docs/index.md` — Python-only framing updated; toolkit is dual-language
 
 ---
 

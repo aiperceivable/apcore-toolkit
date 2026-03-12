@@ -65,13 +65,13 @@ The `BaseScanner` provides the foundation for extracting metadata from any frame
 === "TypeScript"
 
     ```typescript
-    import { BaseScanner, ScannedModule } from "apcore-toolkit";
+    import { BaseScanner, ScannedModule, createScannedModule } from "apcore-toolkit";
 
     class MyScanner extends BaseScanner {
       scan(): ScannedModule[] {
         // Scan your framework endpoints and return ScannedModule instances
         return [
-          new ScannedModule({
+          createScannedModule({
             moduleId: "users.get_user",
             description: "Get a user by ID",
             inputSchema: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
@@ -111,7 +111,7 @@ Use built-in utilities to refine your scanned modules.
 
     ```typescript
     // Filter modules by ID using regex
-    modules = scanner.filterModules(modules, { include: /^users\./ });
+    modules = scanner.filterModules(modules, { include: "^users\\." });
 
     // Ensure all module IDs are unique
     modules = scanner.deduplicateIds(modules);
@@ -142,7 +142,7 @@ Generates `.binding.yaml` files for `apcore.BindingLoader`.
     import { YAMLWriter } from "apcore-toolkit";
 
     const writer = new YAMLWriter();
-    writer.write(modules, { outputDir: "./bindings" });
+    writer.write(modules, "./bindings");
     ```
 
 ### Option B: Python / TypeScript Wrappers
@@ -164,7 +164,7 @@ Generates decorator-based wrapper files for your language.
     import { TypeScriptWriter } from "apcore-toolkit";
 
     const writer = new TypeScriptWriter();
-    writer.write(modules, { outputDir: "./generated" });
+    writer.write(modules, "./generated");
     ```
 
 ### Option C: Direct Registration
@@ -185,7 +185,7 @@ Registers modules directly into an active `apcore.Registry`.
 === "TypeScript"
 
     ```typescript
-    import { Registry } from "@anthropic/apcore";
+    import { Registry } from "apcore-js";
     import { RegistryWriter } from "apcore-toolkit";
 
     const registry = new Registry();
@@ -219,12 +219,14 @@ Flatten complex models into scalar keyword arguments, perfect for MCP (Model Con
 
     ```typescript
     import { flattenParams, resolveTarget } from "apcore-toolkit";
+    import { z } from "zod";
 
-    // Resolve a target string to a callable
-    const func = resolveTarget("myapp/views:createTask");
+    // Resolve a target string to a callable (resolveTarget is async)
+    const func = await resolveTarget("myapp/views:createTask") as (input: Record<string, unknown>) => unknown;
 
-    // Wrap the function to accept flat kwargs
-    const wrapped = flattenParams(func);
+    // Define the input schema and wrap the function for flat-arg invocation
+    const schema = z.object({ id: z.number() });
+    const wrapped = flattenParams(func, schema);
     ```
 
 ### OpenAPI Extraction
@@ -243,7 +245,7 @@ Extract JSON Schemas directly from OpenAPI operation objects.
 === "TypeScript"
 
     ```typescript
-    import { extractInputSchema, extractOutputSchema } from "apcore-toolkit/openapi";
+    import { extractInputSchema, extractOutputSchema } from "apcore-toolkit";
 
     const inputSchema = extractInputSchema(operation, openapiDoc);
     const outputSchema = extractOutputSchema(operation, openapiDoc);
@@ -271,5 +273,5 @@ See the [AI Enhancement Guide](ai-enhancement.md) for more details.
 
 - **[Features Overview](features/overview.md)** — Deep dive into all toolkit capabilities.
 - **[AI Enhancement Guide](ai-enhancement.md)** — Strategy for metadata enrichment using SLMs.
-- **[Changelog](changelog.md)** — See what's new in the latest release.
+- **[Changelog](../CHANGELOG.md)** — See what's new in the latest release.
 - **[apcore Documentation](https://aipartnerup.github.io/apcore/)** — Learn more about the core framework.

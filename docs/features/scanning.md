@@ -137,20 +137,23 @@ When implementing a custom scanner, you inherit from `BaseScanner`:
 === "TypeScript"
 
     ```typescript
-    import { BaseScanner, ScannedModule } from "apcore-toolkit";
+    import { BaseScanner, ScannedModule, createScannedModule } from "apcore-toolkit";
 
     class MyScanner extends BaseScanner {
-      scan(options?: { include?: RegExp }): ScannedModule[] {
+      scan(options?: { include?: string }): ScannedModule[] {
         // 1. Discover endpoints from your framework
         const endpoints = this.getMyEndpoints();
 
         // 2. Convert endpoints to ScannedModules
         let modules = endpoints.map((e) =>
-          new ScannedModule({
+          createScannedModule({
             moduleId: e.name,
-            description: this.extractDocstring(e.viewFunc).description,
+            description: this.extractDocstring(e.viewFunc).description ?? '',
+            inputSchema: {},
+            outputSchema: {},
+            tags: [],
             target: `${e.module}:${e.funcName}`,
-            annotations: this.inferAnnotationsFromMethod(e.method),
+            annotations: MyScanner.inferAnnotationsFromMethod(e.method),
             // ... other metadata
           })
         );
