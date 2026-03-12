@@ -30,6 +30,7 @@ jobs:
         run: |
           # Copy README as index page
           cp README.md docs/index.md
+          cp CHANGELOG.md docs/changelog.md
 
           # Copy logo into docs assets
           mkdir -p docs/assets

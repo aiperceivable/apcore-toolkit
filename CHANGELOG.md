@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-12
+
+### Added
+
+- `TypeScriptWriter` to Core Modules tables in README and docs index
+- `"typescript"` format to `get_writer()` factory example
+- `documentation` and `warnings` fields to `ScannedModule` Fields table
+- Serialization Utilities section (`annotationsToDict`, `moduleToDict`)
+  in Smart Scanning docs
+- Changelog page for documentation site
+
+### Fixed
+
+- Updated `WriteResult` table in Output Writers docs with TypeScript naming
+  and type columns
+- Fixed `ai_guidance` → `metadata.ai_guidance` in AI Enhancement docs
+
+---
+
 ## [0.1.0] - 2026-03-06
 
 Initial release. Extracts shared framework-agnostic logic from `django-apcore`

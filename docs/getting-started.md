@@ -7,12 +7,12 @@ This guide walks you through installing **apcore-toolkit** and using its core mo
 === "Python"
 
     - **Python**: 3.11+
-    - **apcore**: 0.9.0+
+    - **apcore**: 0.13.0+
 
 === "TypeScript"
 
     - **Node.js**: 18+
-    - **apcore**: 0.9.0+
+    - **apcore**: 0.13.0+
 
 ---
 
