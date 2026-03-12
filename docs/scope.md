@@ -13,7 +13,7 @@ A **shared utility library** for framework-specific adapters (e.g., `django-apco
 | **Scanning abstractions** | `BaseScanner` ABC, filtering, deduplication, behavioral inference |
 | **Schema extraction** | OpenAPI parsing, Pydantic/Zod model flattening, description enrichment |
 | **Output generation** | Writers for YAML bindings, source code wrappers, and direct Registry registration |
-| **Output verification** | Optional validation that written artifacts are well-formed |
+| **Output verification** | Pluggable `Verifier` protocol for validating written artifacts are well-formed |
 | **AI metadata enhancement** | SLM-based enrichment for missing descriptions, annotations, and schemas |
 | **Formatting** | Data-to-Markdown conversion for AI-perceivable documentation |
 

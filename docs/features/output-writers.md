@@ -145,6 +145,112 @@ Each write operation returns a list of `WriteResult` objects:
 !!! tip "Use in CI"
     Enable verification in CI pipelines to catch binding generation issues before deployment. A scan → write → verify cycle ensures that generated artifacts are always loadable by apcore.
 
+## Custom Verifiers
+
+The built-in verification checks (YAML parsability, AST syntax, Registry lookup) cover common cases. For domain-specific needs, writers accept a pluggable `Verifier` interface.
+
+### Verifier Protocol
+
+=== "Python"
+
+    ```python
+    from typing import Protocol
+
+    class Verifier(Protocol):
+        def verify(self, path: str, module_id: str) -> VerifyResult: ...
+
+    @dataclass
+    class VerifyResult:
+        ok: bool
+        error: str | None = None
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    interface Verifier {
+      verify(path: string, moduleId: string): VerifyResult;
+    }
+
+    interface VerifyResult {
+      ok: boolean;
+      error?: string;
+    }
+    ```
+
+### Built-in Verifiers
+
+| Verifier | Used By | Checks |
+|----------|---------|--------|
+| `YAMLVerifier` | `YAMLWriter` | YAML parses, required fields present |
+| `SyntaxVerifier` | `PythonWriter` / `TypeScriptWriter` | Source code parses without errors |
+| `RegistryVerifier` | `RegistryWriter` | Module registered and retrievable |
+| `MagicBytesVerifier` | (available for custom use) | File header matches expected format |
+| `JSONVerifier` | (available for custom use) | JSON parses, optional schema validation |
+
+### Custom Verifier Example
+
+=== "Python"
+
+    ```python
+    from apcore_toolkit.output import YAMLWriter, Verifier, VerifyResult
+
+    class StrictYAMLVerifier:
+        """Verify YAML bindings have descriptions for all parameters."""
+
+        def verify(self, path: str, module_id: str) -> VerifyResult:
+            with open(path) as f:
+                data = yaml.safe_load(f)
+            schema = data.get("input_schema", {})
+            for prop, spec in schema.get("properties", {}).items():
+                if "description" not in spec:
+                    return VerifyResult(ok=False, error=f"Missing description for {prop}")
+            return VerifyResult(ok=True)
+
+    writer = YAMLWriter()
+    results = writer.write(modules, output_dir="./bindings", verify=True, verifiers=[StrictYAMLVerifier()])
+    ```
+
+### Verifier Chain
+
+When multiple verifiers are provided, they run in order. The first failure stops the chain and sets `WriteResult.verified = False`.
+
+```python
+results = writer.write(
+    modules,
+    output_dir="./bindings",
+    verify=True,
+    verifiers=[YAMLVerifier(), StrictYAMLVerifier(), CustomSchemaVerifier()],
+)
+```
+
+!!! tip "Lesson from CLI-Anything"
+    The [CLI-Anything](https://github.com/HKUDS/CLI-Anything) project validates output with magic bytes, pixel analysis, and RMS audio levels — never trusting exit code alone. The same principle applies: **always verify the artifact, not the process exit status.** The `MagicBytesVerifier` is directly inspired by this approach.
+
+## Error Handling
+
+Writers and verifiers follow a consistent error handling pattern:
+
+| Scenario | Behavior |
+|----------|----------|
+| **Write succeeds, verify succeeds** | `WriteResult(verified=True)` |
+| **Write succeeds, verify fails** | `WriteResult(verified=False, verification_error="...")` — artifact exists but is malformed |
+| **Write fails (I/O error)** | Raises `WriteError` with path and cause |
+| **Verifier itself throws** | Caught and wrapped as `WriteResult(verified=False, verification_error="Verifier crashed: ...")` |
+
+Writers never silently swallow errors. If `verify=False`, verification is skipped entirely (not suppressed).
+
+=== "Python"
+
+    ```python
+    from apcore_toolkit.output import WriteError
+
+    try:
+        results = writer.write(modules, output_dir="./bindings", verify=True)
+    except WriteError as e:
+        print(f"Failed to write {e.path}: {e.cause}")
+    ```
+
 ## Choosing a Writer
 
 | Use Case | Recommended Writer |
