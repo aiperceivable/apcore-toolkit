@@ -11,7 +11,7 @@
 | **[Schema Utilities](pydantic.md)** | Flatten complex models (Pydantic / Zod) for easier AI interaction. |
 | **[Output Writers](output-writers.md)** | Export metadata to YAML bindings, source code wrappers, or direct Registry registration — with optional output verification. |
 | **[Formatting](formatting.md)** | Convert data structures into beautiful, human-readable Markdown. |
-| **[AI Enhancement](../ai-enhancement.md)** | Use local SLMs to automatically fill in missing metadata, including behavioral annotation inference. |
+| **[AI Enhancement](../ai-enhancement.md)** | Pluggable `Enhancer` protocol with built-in `AIEnhancer` for local SLMs; [apcore-refinery](https://github.com/aipartnerup/apcore-refinery) recommended for production. |
 
 ## Design Philosophy
 

@@ -14,7 +14,7 @@ A **shared utility library** for framework-specific adapters (e.g., `django-apco
 | **Schema extraction** | OpenAPI parsing, Pydantic/Zod model flattening |
 | **Output generation** | Writers for YAML bindings, source code wrappers, and direct Registry registration |
 | **Output verification** | Pluggable `Verifier` protocol for validating written artifacts are well-formed |
-| **AI metadata enhancement** | SLM-based enrichment for missing descriptions, annotations, and schemas |
+| **AI metadata enhancement** | `Enhancer` protocol with built-in `AIEnhancer`; enrichment for missing descriptions, annotations, and schemas |
 | **Formatting** | Data-to-Markdown conversion for AI-perceivable documentation, schema description enrichment |
 
 ## What apcore-toolkit Is NOT

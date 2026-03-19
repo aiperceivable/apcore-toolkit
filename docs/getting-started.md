@@ -253,25 +253,30 @@ Extract JSON Schemas directly from OpenAPI operation objects.
 
 ---
 
-## Step 5: Enable AI Enhancement (Optional)
+## Step 5: Enhance Metadata with AI (Optional)
 
-Enhance your metadata using local Small Language Models (SLMs).
+The toolkit includes a built-in `AIEnhancer` that calls any OpenAI-compatible local API to fill metadata gaps (missing descriptions, annotations, schemas).
 
-1. **Install Ollama** and pull a model (e.g., `qwen:0.6b`).
-2. **Configure Environment**:
+1. **Install Ollama** and pull a model (e.g., `qwen:0.6b` or a larger model for better quality).
+2. **Enable**:
    ```bash
    export APCORE_AI_ENABLED=true
-   export APCORE_AI_MODEL="qwen:0.6b"
    ```
-3. **Run your scanner**: Missing descriptions and documentation will be automatically inferred.
+3. **Run your scanner** with `--ai-enhance`: Missing descriptions, annotations, and schemas will be inferred automatically.
 
-See the [AI Enhancement Guide](ai-enhancement.md) for more details.
+For production use, we recommend **[apcore-refinery](https://github.com/aipartnerup/apcore-refinery)** which provides better prompts, model flexibility, and CI integration:
+
+```bash
+apcore-refinery enhance ./bindings --model <your-preferred-model>
+```
+
+See the [AI Enhancement Guide](ai-enhancement.md) for the full `Enhancer` protocol, `AIEnhancer` configuration, and apcore-refinery details.
 
 ---
 
 ## Next Steps
 
 - **[Features Overview](features/overview.md)** — Deep dive into all toolkit capabilities.
-- **[AI Enhancement Guide](ai-enhancement.md)** — Strategy for metadata enrichment using SLMs.
+- **[AI Enhancement Guide](ai-enhancement.md)** — Enhancer protocol, built-in AIEnhancer, and apcore-refinery.
 - **[Changelog](../CHANGELOG.md)** — See what's new in the latest release.
 - **[apcore Documentation](https://aipartnerup.github.io/apcore/)** — Learn more about the core framework.

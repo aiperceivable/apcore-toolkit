@@ -55,8 +55,8 @@ extra data            metadata      (default: {})
 | `target` | `str` | `string` | *(required)* |
 | `input_schema` / `inputSchema` | `dict` | `Record<string, unknown>` | *(required)* |
 | `output_schema` / `outputSchema` | `dict` | `Record<string, unknown>` | *(required)* |
-| `tags` | `list[str]` | `string[]` | `[]` |
-| `annotations` | `ModuleAnnotations` | `ModuleAnnotations` | `ModuleAnnotations()` |
+| `tags` | `list[str]` | `string[]` | *(required)* |
+| `annotations` | `ModuleAnnotations \| None` | `ModuleAnnotations \| null` | `None` / `null` |
 | `version` | `str` | `string` | `"1.0.0"` |
 | `examples` | `list[ModuleExample]` | `ModuleExample[]` | `[]` |
 | `metadata` | `dict` | `Record<string, unknown>` | `{}` |
@@ -96,7 +96,7 @@ Go beyond HTTP method heuristics. Analyze the function body for behavioral signa
 | `GET` with stable results, no auth-dependent data | `cacheable=True` |
 | `Paginator`, `LIMIT/OFFSET`, cursor tokens | `paginated=True` |
 
-Static analysis can detect some of these patterns. For ambiguous cases, the [AI Enhancement](../ai-enhancement.md) module can assist with SLM-based inference.
+Static analysis can detect some of these patterns. For ambiguous cases, the built-in [AIEnhancer](../ai-enhancement.md) or [apcore-refinery](https://github.com/aipartnerup/apcore-refinery) can assist with AI-based inference.
 
 ## Implementation Example
 
@@ -196,3 +196,4 @@ Two helper functions convert apcore objects to plain dictionaries for JSON/YAML 
 |-------------------------------|-------------|
 | `annotations_to_dict()` / `annotationsToDict()` | Converts a `ModuleAnnotations` instance to a plain dict with snake_case keys |
 | `module_to_dict()` / `moduleToDict()` | Converts a `ScannedModule` to a dict with snake_case keys, suitable for YAML/JSON output |
+| `modules_to_dicts()` / `modulesToDicts()` | Converts a list of `ScannedModule` to a list of dicts (batch version of `module_to_dict`) |

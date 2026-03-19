@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-19
+
+### Added
+
+- `deep_resolve_refs` / `deepResolveRefs` documented in OpenAPI Integration page
+  with three-level resolution explanation
+- `HTTPProxyRegistryWriter` section in Output Writers page with features,
+  installation instructions, and usage example
+- `"http-proxy"` format in `get_writer()` factory table with Language column
+- `HTTPProxyRegistryWriter` and `enrich_schema_descriptions` added to README
+  Core Modules table
+- `modules_to_dicts()` / `modulesToDicts()` added to Serialization Utilities table
+- "Choosing a Writer" table updated with `HTTPProxyRegistryWriter` row
+
+### Fixed
+
+- `resolve_schema` description corrected from "recursively resolves" to
+  "single level only" — the recursive resolver is `deep_resolve_refs`
+- Reference Resolution section rewritten with accurate three-level explanation
+- Duplicate `## Reference Resolution` heading removed
+
+---
+
 ## [0.2.0] - 2026-03-12
 
 ### Added

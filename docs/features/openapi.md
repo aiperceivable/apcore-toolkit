@@ -8,10 +8,11 @@ The toolkit handles the extraction and merging of OpenAPI operation parameters i
 
 | Method | Description |
 |--------|-------------|
-| `extract_input_schema(op, doc)` | Merges query, path, and request body parameters into a single object schema. |
-| `extract_output_schema(op, doc)` | Extracts response schema for `200` or `201` status codes. |
-| `resolve_ref(ref_string, doc)` | Resolves internal JSON pointer references (e.g., `#/components/schemas/User`). |
-| `resolve_schema(schema, doc)` | Recursively resolves `$ref` in a schema object. |
+| `extract_input_schema(op, doc)` | Merges query, path, and request body parameters into a single object schema. Recursively resolves all nested `$ref`. |
+| `extract_output_schema(op, doc)` | Extracts response schema for `200` or `201` status codes. Recursively resolves all nested `$ref`. |
+| `resolve_ref(ref_string, doc)` | Resolves a single internal JSON pointer reference (e.g., `#/components/schemas/User`). |
+| `resolve_schema(schema, doc)` | If the schema contains a top-level `$ref`, resolves it (single level only). |
+| `deep_resolve_refs(schema, doc)` | Recursively resolves all `$ref` pointers in a schema, including nested `allOf`/`anyOf`/`oneOf`, `items`, and `properties`. Depth-limited to 16 levels. |
 
 ## Parameter Merging
 
@@ -73,4 +74,10 @@ This produces the flat `input_schema` required by the `ScannedModule`.
 
 ## Reference Resolution
 
-The toolkit includes a standalone JSON pointer resolver (`resolve_ref`) that ensures complex, nested OpenAPI schemas are correctly flattened into standalone JSON Schema objects, even when components are shared across many endpoints.
+The toolkit provides three levels of `$ref` resolution:
+
+1. **`resolve_ref(ref_string, doc)`** — Resolves a single JSON pointer (e.g., `#/components/schemas/User`) to the referenced schema dict.
+2. **`resolve_schema(schema, doc)`** — If the top-level schema contains `$ref`, resolves it once. Returns inline schemas unchanged.
+3. **`deep_resolve_refs(schema, doc)`** / **`deepResolveRefs(schema, doc)`** — Recursively walks the entire schema tree, resolving `$ref` inside `properties`, `allOf`/`anyOf`/`oneOf`, and `items`. Depth-limited to 16 levels to prevent infinite recursion on circular references.
+
+Both `extract_input_schema` and `extract_output_schema` call `deep_resolve_refs` internally, so callers get fully resolved schemas by default.

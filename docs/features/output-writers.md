@@ -86,18 +86,51 @@ Directly registers the scanned modules into an active `apcore.Registry` instance
     writer.write(modules, registry, { dryRun: false });
     ```
 
+## `HTTPProxyRegistryWriter` (Python only)
+
+Registers scanned modules as HTTP proxy classes that forward requests to a running web API. This enables CLI execution without invoking route handlers directly (which depend on framework DI systems).
+
+### Features
+- **No Direct Handler Invocation**: Proxies requests over HTTP instead of calling view functions.
+- **Path Parameter Substitution**: Automatically maps path parameters (e.g., `/items/{item_id}`) from input values.
+- **Auth Support**: Pluggable `auth_header_factory` for Bearer tokens or custom headers.
+- **Success Range**: Accepts any `2xx` response as success; `204 No Content` returns `{}`.
+
+### Installation
+
+Requires the `httpx` optional dependency:
+
+```bash
+pip install apcore-toolkit[http-proxy]
+```
+
+### Usage
+
+```python
+from apcore import Registry
+from apcore_toolkit import HTTPProxyRegistryWriter
+
+registry = Registry()
+writer = HTTPProxyRegistryWriter(
+    base_url="http://localhost:8000",
+    auth_header_factory=lambda: {"Authorization": "Bearer xxx"},
+)
+writer.write(modules, registry)
+```
+
 ## `get_writer()` Factory
 
 The `get_writer(format)` factory function returns the appropriate writer instance for a given output format, avoiding the need to import each writer class individually.
 
 ### Supported Formats
 
-| Format | Returns |
-|--------|---------|
-| `"yaml"` | `YAMLWriter` instance |
-| `"python"` | `PythonWriter` instance |
-| `"typescript"` | `TypeScriptWriter` instance |
-| `"registry"` | `RegistryWriter` instance |
+| Format | Returns | Language |
+|--------|---------|----------|
+| `"yaml"` | `YAMLWriter` instance | Both |
+| `"python"` | `PythonWriter` instance | Python |
+| `"typescript"` | `TypeScriptWriter` instance | TypeScript |
+| `"registry"` | `RegistryWriter` instance | Both |
+| `"http-proxy"` | `HTTPProxyRegistryWriter` instance | Python |
 
 === "Python"
 
@@ -107,6 +140,7 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
     writer = get_writer("yaml")       # YAMLWriter
     writer = get_writer("python")     # PythonWriter
     writer = get_writer("registry")   # RegistryWriter
+    writer = get_writer("http-proxy", base_url="http://localhost:8000")  # HTTPProxyRegistryWriter
     ```
 
 === "TypeScript"
@@ -309,6 +343,7 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
 | Use Case | Recommended Writer |
 |----------|--------------------|
 | Configuration-first approach | `YAMLWriter` |
-| Migrating legacy views to decorators | `PythonWriter` |
+| Migrating legacy views to decorators | `PythonWriter` / `TypeScriptWriter` |
 | Live, dynamic module exposure | `RegistryWriter` |
 | Fast, zero-config integration | `RegistryWriter` |
+| CLI execution against a running API (Python) | `HTTPProxyRegistryWriter` |

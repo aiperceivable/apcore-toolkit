@@ -6,7 +6,9 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://github.com/aipartnerup/apcore-toolkit-python)
+[![Python SDK](https://img.shields.io/badge/python_sdk-0.3.0-green)](https://github.com/aipartnerup/apcore-toolkit-python)
 [![TypeScript Version](https://img.shields.io/badge/typescript-5.0%2B-blue)](https://github.com/aipartnerup/apcore-toolkit-typescript)
+[![TypeScript SDK](https://img.shields.io/badge/typescript_sdk-0.3.0-green)](https://github.com/aipartnerup/apcore-toolkit-typescript)
 
 **apcore-toolkit** is a shared scanner, schema extraction, and output toolkit for the [apcore](https://github.com/aipartnerup/apcore-python) ecosystem. It provides framework-agnostic logic to extract metadata from existing code and make it "AI-Perceivable".
 
@@ -22,7 +24,7 @@ Available in:
 - **🔍 Smart Scanning**: Abstract base classes for framework scanners with filtering and deduplication.
 - **📄 Output Generation**: Writers for YAML bindings, language-specific wrappers, and direct Registry registration.
 - **🛠️ Schema Utilities**: Tools for Pydantic/Zod model flattening and OpenAPI schema extraction.
-- **🤖 AI Enhancement**: Metadata enrichment using local SLMs (Small Language Models).
+- **🤖 AI Enhancement**: Built-in `AIEnhancer` with local SLM support, pluggable `Enhancer` protocol, and [apcore-refinery](https://github.com/aipartnerup/apcore-refinery) for production use.
 - **📝 Markdown Formatting**: Convert arbitrary data structures to structured Markdown.
 
 ---
@@ -103,8 +105,11 @@ Available in:
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
 | `TypeScriptWriter` | Generates `@module`-decorated TypeScript wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |
+| `HTTPProxyRegistryWriter` | Registers HTTP proxy modules that forward requests to a running API (Python only) |
 | `to_markdown` | Converts arbitrary dicts to Markdown with depth control and table heuristics |
-| `AIEnhancer` | SLM-based metadata enrichment for missing descriptions and schemas |
+| `enrich_schema_descriptions` | Merges docstring parameter descriptions into JSON Schema properties |
+| `Enhancer` | Protocol/interface for pluggable metadata enrichment (see [AI Enhancement](docs/ai-enhancement.md)) |
+| `AIEnhancer` | Built-in `Enhancer` implementation using OpenAI-compatible local APIs |
 | `WriteResult` | Dataclass representing the outcome of a writer operation |
 | `WriteError` | Exception raised when a writer fails due to I/O or other errors |
 | `Verifier` / `VerifyResult` | Protocol and result type for pluggable output verification |
@@ -115,7 +120,7 @@ Available in:
 
 - **[Getting Started Guide](docs/getting-started.md)** — Installation and core usage
 - **[Features Overview](docs/features/overview.md)** — Detailed look at toolkit capabilities
-- **[AI Enhancement Guide](docs/ai-enhancement.md)** — Metadata enrichment strategy
+- **[AI Enhancement Guide](docs/ai-enhancement.md)** — Enhancer protocol, built-in AIEnhancer, and apcore-refinery
 - **[Changelog](CHANGELOG.md)**
 
 ---
