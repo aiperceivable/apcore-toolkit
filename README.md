@@ -9,18 +9,21 @@
 [![Python SDK](https://img.shields.io/badge/python_sdk-0.3.0-green)](https://github.com/aipartnerup/apcore-toolkit-python)
 [![TypeScript Version](https://img.shields.io/badge/typescript-5.0%2B-blue)](https://github.com/aipartnerup/apcore-toolkit-typescript)
 [![TypeScript SDK](https://img.shields.io/badge/typescript_sdk-0.3.0-green)](https://github.com/aipartnerup/apcore-toolkit-typescript)
+[![Rust Version](https://img.shields.io/badge/rust-1.70%2B-blue)](https://github.com/aipartnerup/apcore-toolkit-rust)
+[![Rust SDK](https://img.shields.io/badge/rust_sdk-0.3.0-green)](https://github.com/aipartnerup/apcore-toolkit-rust)
 
 **apcore-toolkit** is a shared scanner, schema extraction, and output toolkit for the [apcore](https://github.com/aipartnerup/apcore-python) ecosystem. It provides framework-agnostic logic to extract metadata from existing code and make it "AI-Perceivable".
 
 Available in:
 - [🐍 Python](https://github.com/aipartnerup/apcore-toolkit-python)
 - [📘 TypeScript](https://github.com/aipartnerup/apcore-toolkit-typescript)
+- [🦀 Rust](https://github.com/aipartnerup/apcore-toolkit-rust)
 
 ---
 
 ## Key Features
 
-- **🚀 Multi-Language Support**: Implementation available for both [🐍 Python](https://github.com/aipartnerup/apcore-toolkit-python) and [📘 TypeScript](https://github.com/aipartnerup/apcore-toolkit-typescript).
+- **🚀 Multi-Language Support**: Implementation available for [🐍 Python](https://github.com/aipartnerup/apcore-toolkit-python), [📘 TypeScript](https://github.com/aipartnerup/apcore-toolkit-typescript), and [🦀 Rust](https://github.com/aipartnerup/apcore-toolkit-rust).
 - **🔍 Smart Scanning**: Abstract base classes for framework scanners with filtering and deduplication.
 - **📄 Output Generation**: Writers for YAML bindings, language-specific wrappers, and direct Registry registration.
 - **🛠️ Schema Utilities**: Tools for Pydantic/Zod model flattening and OpenAPI schema extraction.
@@ -44,6 +47,14 @@ Available in:
     npm install apcore-toolkit
     ```
     Requires Node.js 18+ and apcore 0.13.0+.
+
+=== "🦀 Rust"
+
+    ```toml
+    [dependencies]
+    apcore-toolkit = { git = "https://github.com/aipartnerup/apcore-toolkit-rust" }
+    ```
+    Requires Rust 1.70+ and apcore 0.13.0+.
 
 ---
 
@@ -91,6 +102,39 @@ Available in:
 
     const scanner = new MyScanner();
     const modules = scanner.scan();
+    ```
+
+=== "🦀 Rust"
+
+    ```rust
+    use apcore_toolkit::{Scanner, ScannedModule};
+    use async_trait::async_trait;
+    use serde_json::json;
+
+    struct MyScanner;
+
+    #[async_trait]
+    impl Scanner<()> for MyScanner {
+        async fn scan(&self, _app: &()) -> Vec<ScannedModule> {
+            vec![
+                ScannedModule::new(
+                    "users.get_user".into(),
+                    "Get a user by ID".into(),
+                    json!({"type": "object", "properties": {"id": {"type": "integer"}}, "required": ["id"]}),
+                    json!({"type": "object", "properties": {"name": {"type": "string"}}}),
+                    vec!["users".into()],
+                    "myapp:get_user".into(),
+                )
+            ]
+        }
+        fn source_name(&self) -> &str { "my-framework" }
+    }
+
+    #[tokio::main]
+    async fn main() {
+        let scanner = MyScanner;
+        let modules = scanner.scan(&()).await;
+    }
     ```
 
 ---
