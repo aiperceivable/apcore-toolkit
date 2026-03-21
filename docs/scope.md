@@ -32,7 +32,7 @@ Scanning CLI tools (parsing `--help`, man pages, subcommand trees) is a **fundam
 | **Complexity** | BaseScanner + a few hundred lines per adapter | Requires per-tool adapters with deep domain knowledge |
 | **Users** | Framework adapter developers | Automation engineers, AI agent developers |
 
-CLI tool scanning should live in a **separate project** (e.g., `apcli`) that:
+CLI tool scanning should live in a **separate project** that:
 
 - Consumes `apcore-toolkit`'s `BaseScanner` and Writer classes as building blocks.
 - Owns the CLI-specific parsing, heuristics, and per-tool adapter logic.
@@ -67,7 +67,7 @@ Orchestration, token management, and multi-agent coordination belong to `apflow`
           ┌────────────────┼────────────────┐
           │                │                │
    ┌──────┴──────┐  ┌─────┴──────┐  ┌──────┴──────┐
-   │ django-apcore│  │flask-apcore│  │apcli   │
+   │ django-apcore│  │flask-apcore│  │  ...        │
    │ (adapter)   │  │ (adapter)  │  │ (adapter)   │
    └──────┬──────┘  └─────┬──────┘  └──────┬──────┘
           │                │                │
