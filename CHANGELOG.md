@@ -20,6 +20,20 @@ All notable changes to this project will be documented in this file.
 
 - 30 new tests in `tests/test_display_resolver.py` covering: no-binding fallthrough, alias-only overlay, surface-specific overrides, MCP sanitization, MCP 64-char limit, `suggested_alias` fallback, sparse overlay (10 modules / 1 binding), tags resolution, `binding_path` file and directory loading, guidance chain, CLI invalid alias warning and fallback, `binding_data` vs `binding_path` precedence.
 
+### Added (Convention Module Discovery — §5.14)
+
+- **`ConventionScanner`** — scans a `commands/` directory of plain Python files for public functions and converts them to `ScannedModule` instances with schema inferred from PEP 484 type annotations.
+  - Module ID: `{file_prefix}.{function_name}` with `MODULE_PREFIX` override.
+  - Description from first line of docstring (`"(no description)"` fallback).
+  - `input_schema` / `output_schema` inferred from type hints.
+  - `CLI_GROUP` and `TAGS` module-level constants stored in metadata.
+  - `include` / `exclude` regex filters on module IDs.
+- **New feature spec**: `docs/features/convention-scanning.md`
+
+### Tests (Convention Module Discovery)
+
+- 15 new tests in `tests/test_convention_scanner.py`.
+
 ---
 
 ## [0.3.1] - 2026-03-22

@@ -13,6 +13,7 @@
 | **[Formatting](formatting.md)** | Convert data structures into beautiful, human-readable Markdown. |
 | **[AI Enhancement](../ai-enhancement.md)** | Pluggable `Enhancer` protocol with built-in `AIEnhancer` for local SLMs; [apcore-refinery](https://github.com/aiperceivable/apcore-refinery) recommended for production. |
 | **[Display Overlay](display-overlay.md)** | Sparse `binding.yaml` overlay that resolves surface-facing alias, description, guidance, and tags into `metadata["display"]` for CLI, MCP, and A2A surfaces (§5.13). |
+| **[Convention Scanning](convention-scanning.md)** | Scan a `commands/` directory of plain Python files for public functions, inferring schemas from type annotations -- zero decorators, zero imports (§5.14). |
 
 ## Design Philosophy
 

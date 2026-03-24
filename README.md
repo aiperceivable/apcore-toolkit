@@ -158,6 +158,7 @@ Available in:
 | `WriteError` | Exception raised when a writer fails due to I/O or other errors |
 | `Verifier` / `VerifyResult` | Protocol and result type for pluggable output verification |
 | `DisplayResolver` | Sparse binding.yaml display overlay — resolves surface-facing alias, description, guidance, tags into `metadata["display"]` (§5.13) |
+| `ConventionScanner` | Scans a `commands/` directory of plain Python files for public functions and converts them to `ScannedModule` instances with schema inferred from type annotations (§5.14) |
 
 ---
 
