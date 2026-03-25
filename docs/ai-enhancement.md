@@ -7,7 +7,7 @@ This document specifies how `apcore-toolkit` fills metadata gaps that static ana
 The toolkit's primary mission is to make existing code "AI-Perceivable". While static analysis (regex, AST, type hints) is efficient, it often fails to:
 
 - Generate meaningful `description` and `documentation` for legacy code with no docstrings.
-- Create effective guidance (stored in `metadata.ai_guidance`) for complex error handling paths.
+- Create effective guidance for complex error handling paths. (The scanner stores raw guidance in `metadata.ai_guidance`; `DisplayResolver` later resolves it into `metadata["display"]["guidance"]` for surface-specific consumption — see [Display Overlay](features/display-overlay.md).)
 - Infer `input_schema` for functions using `*args` or `**kwargs`.
 - Determine behavioral `annotations` (e.g., is this function destructive?) from code logic.
 
@@ -66,6 +66,9 @@ The toolkit exports a generic `Enhancer` protocol that any enhancement implement
       enhance(modules: ScannedModule[]): Promise<ScannedModule[]>;
     }
     ```
+
+!!! note "Sync vs Async"
+    The Python `Enhancer` protocol is synchronous (`list[ScannedModule]`) while the TypeScript interface is asynchronous (`Promise<ScannedModule[]>`). This is a deliberate language-convention choice: TypeScript enhancement calls (HTTP to SLM endpoints) are inherently async. Python implementations may use either sync or async internally; the protocol defines the sync signature for broader compatibility.
 
 ### Contract
 

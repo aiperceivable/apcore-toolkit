@@ -15,6 +15,9 @@ This is the lowest-friction path to creating apcore modules: drop a `.py` file i
 **Class**: `apcore_toolkit.convention_scanner.ConventionScanner`
 **Module**: `apcore_toolkit/convention_scanner.py`
 
+!!! note "Relationship to BaseScanner"
+    `ConventionScanner` **extends** `BaseScanner` and inherits its shared utilities (`filter_modules`, `deduplicate_ids`, `infer_annotations_from_method`, `extract_docstring`). Its `scan()` method accepts a positional `commands_dir` parameter (plus keyword-only `include`/`exclude`) rather than the generic `**kwargs` of the abstract base — this is valid because `BaseScanner.scan()` declares `**kwargs` to allow subclass-specific signatures. Convention scanning is currently **Python-only** because it relies on Python's `importlib` to dynamically load `.py` files.
+
 ### Method Signature
 
 ```python

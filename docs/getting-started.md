@@ -262,7 +262,30 @@ The toolkit includes a built-in `AIEnhancer` that calls any OpenAI-compatible lo
    ```bash
    export APCORE_AI_ENABLED=true
    ```
-3. **Run your scanner** with `--ai-enhance`: Missing descriptions, annotations, and schemas will be inferred automatically.
+3. **Use AIEnhancer programmatically** after scanning:
+
+=== "Python"
+
+    ```python
+    from apcore_toolkit import AIEnhancer
+
+    if AIEnhancer.is_enabled():
+        enhancer = AIEnhancer()
+        modules = enhancer.enhance(modules)
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { AIEnhancer } from "apcore-toolkit";
+
+    if (AIEnhancer.isEnabled()) {
+      const enhancer = new AIEnhancer();
+      modules = await enhancer.enhance(modules);
+    }
+    ```
+
+Missing descriptions, annotations, and schemas will be inferred automatically.
 
 For production use, we recommend **[apcore-refinery](https://github.com/aiperceivable/apcore-refinery)** which provides better prompts, model flexibility, and CI integration:
 
@@ -278,5 +301,5 @@ See the [AI Enhancement Guide](ai-enhancement.md) for the full `Enhancer` protoc
 
 - **[Features Overview](features/overview.md)** — Deep dive into all toolkit capabilities.
 - **[AI Enhancement Guide](ai-enhancement.md)** — Enhancer protocol, built-in AIEnhancer, and apcore-refinery.
-- **[Changelog](../CHANGELOG.md)** — See what's new in the latest release.
+- **[Changelog](https://github.com/aiperceivable/apcore-toolkit/releases)** — See what's new in the latest release.
 - **[apcore Documentation](https://aiperceivable.github.io/apcore/)** — Learn more about the core framework.
