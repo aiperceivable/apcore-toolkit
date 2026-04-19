@@ -198,7 +198,7 @@ For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer
 - `exclude`: string regex pattern, optional — if provided, modules whose `module_id` matches are removed; invalid regex raises error
 
 ### Errors
-- `re.error` (Python) / `Error` (TypeScript) / `Err(regex::Error)` (Rust) — when `include` or `exclude` is an invalid regex pattern
+- Invalid regex patterns raise `re.error` (Python), `SyntaxError` (TypeScript — subtype of Error), or return `Err(regex::Error)` (Rust). Note: Rust is the only SDK that returns the error via Result rather than throwing.
 
 ### Returns
 - On success: filtered `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>`
