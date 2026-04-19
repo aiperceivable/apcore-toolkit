@@ -154,6 +154,29 @@ In Rust the error is an enum (`thiserror`-derived) with 5 variants — `PathNotF
 
 Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — those default to empty on load.
 
+---
+
+## Contract: BindingLoader.load
+
+### Inputs
+- `path`: string or Path, required — path to a `.binding.yaml` file OR a directory containing `.binding.yaml` files
+- `strict`: bool, optional, default=false — if true, raises on any malformed binding entry
+- `recursive`: bool, optional, default=false — Python only: if true, walks subdirectories for `*.binding.yaml` files (TypeScript and Rust always do flat directory scan)
+
+### Errors
+- `BindingLoadError` / `BindingLoadError` (Python raises, Rust returns `Err`) — path not found, YAML parse failure, or strict mode violation
+
+### Returns
+- On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>` — all modules loaded from the file or directory
+- On directory with no `.binding.yaml` files: returns empty list (not an error)
+
+### Properties
+- async: false
+- pure: false (reads filesystem)
+- thread_safe: true (no shared state)
+
+---
+
 ## Comparison with `apcore.BindingLoader`
 
 | Aspect | `apcore-toolkit` `BindingLoader` | `apcore` `BindingLoader` |

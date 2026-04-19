@@ -350,6 +350,54 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
         print(f"Failed to write {e.path}: {e.cause}")
     ```
 
+---
+
+## Contract: YAMLWriter.write
+
+### Inputs
+- `modules`: list of `ScannedModule`, required
+- `output_dir`: string or Path, required — directory where `.binding.yaml` files will be written (one file per module)
+- `dry_run`: bool, optional, default=false — if true, no files are written; returns what would be written
+- `verify`: bool, optional, default=false — if true, runs built-in `YAMLVerifier` after writing each file
+- `verifiers`: list of verifier objects, optional — additional custom verifiers to run after write
+
+### Errors
+- `WriteError` / `WriteError` — file system write failure
+- Re-raises verifier exceptions only if verifiers are not wrapped (TypeScript does not wrap; Python and Rust do)
+
+### Returns
+- On success: list of `WriteResult` — one per module; each has `module_id`, `path`, `ok`, `verified`, `verification_error`
+
+### Properties
+- async: false (Python, Rust) / async: true (TypeScript — always `await writer.write(...)`)
+- pure: false (writes to filesystem unless dry_run=true)
+- idempotent: true (writing same modules twice produces same files)
+
+---
+
+## Contract: RegistryWriter.write
+
+### Inputs
+- `modules`: list of `ScannedModule`, required
+- `registry`: `apcore.Registry` / `Registry` (from `apcore-js`), required — the live registry to register modules into
+- `dry_run`: bool, optional, default=false — if true, no modules are registered; returns what would be registered
+- `verify`: bool, optional, default=false — if true, runs built-in `RegistryVerifier` after each registration
+- `verifiers`: list of verifier objects, optional — additional custom verifiers
+
+### Errors
+- `WriteError` — registration failure (e.g., registry rejected the module)
+- Re-raises verifier exceptions only if verifiers are not wrapped
+
+### Returns
+- On success: list of `WriteResult` — one per module; `path` is `None`/`null` (no file written)
+
+### Properties
+- async: false (Python, Rust) / async: true (TypeScript — always `await writer.write(...)`)
+- pure: false (mutates registry unless dry_run=true)
+- idempotent: false (registering the same module_id twice may overwrite or raise depending on registry configuration)
+
+---
+
 ## Choosing a Writer
 
 | Use Case | Recommended Writer |

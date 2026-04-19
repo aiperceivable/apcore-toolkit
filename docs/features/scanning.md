@@ -188,6 +188,81 @@ Scanners often encounter naming collisions (e.g., `GET /users` and `POST /users`
 
 For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer-behavioral-annotations) above and the [AI Enhancement](../ai-enhancement.md) module.
 
+---
+
+## Contract: BaseScanner.filter_modules
+
+### Inputs
+- `modules`: list of `ScannedModule`, required
+- `include`: string regex pattern, optional — if provided, only modules whose `module_id` matches are kept; invalid regex raises error
+- `exclude`: string regex pattern, optional — if provided, modules whose `module_id` matches are removed; invalid regex raises error
+
+### Errors
+- `re.error` (Python) / `Error` (TypeScript) / `Err(regex::Error)` (Rust) — when `include` or `exclude` is an invalid regex pattern
+
+### Returns
+- On success: filtered `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>`
+
+### Properties
+- async: false
+- thread_safe: true (no mutation of inputs)
+- pure: true
+
+---
+
+## Contract: BaseScanner.deduplicate_ids
+
+### Inputs
+- `modules`: list of `ScannedModule`, required
+
+### Errors
+- None raised
+
+### Returns
+- On success: list with duplicate `module_id` values renamed (`_2`, `_3` suffix); original module order preserved; renamed modules have a warning appended to their `warnings` list
+
+### Properties
+- async: false
+- pure: false (mutates warnings field of ScannedModule)
+
+---
+
+## Contract: BaseScanner.scan
+
+### Inputs
+- Framework-specific — subclass defines the signature. Python implementations typically accept `**kwargs`; TypeScript implementations accept an options object.
+
+### Errors
+- Framework-specific — subclass defines error behavior
+- `re.error` (Python) / `Error` (TypeScript) — if `include`/`exclude` kwargs are forwarded to `filter_modules` with invalid patterns
+
+### Returns
+- On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>` — all discovered modules after filtering and deduplication
+
+### Properties
+- async: false (Python, most TypeScript) / async: true (Rust — `async fn scan`)
+- pure: false (reads framework state, imports modules, may have I/O side effects)
+
+---
+
+## Contract: BaseScanner.infer_annotations_from_method
+
+### Inputs
+- `method`: string HTTP verb (e.g., `"GET"`, `"POST"`, `"DELETE"`, `"PUT"`), required
+
+### Errors
+- None raised — unknown methods return default annotations (all fields false/None)
+
+### Returns
+- On success: `ModuleAnnotations` instance with `readonly`, `cacheable`, `destructive`, `idempotent` set based on HTTP method heuristics
+
+### Properties
+- async: false
+- pure: true
+- thread_safe: true
+
+---
+
 ## Serialization Utilities
 
 Two helper functions convert apcore objects to plain dictionaries for JSON/YAML serialization:

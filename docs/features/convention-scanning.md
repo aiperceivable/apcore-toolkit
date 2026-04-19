@@ -129,6 +129,32 @@ When both are provided, `include` is applied first, then `exclude`.
 modules = scanner.scan("commands/", include=r"^ops\.", exclude=r"debug")
 ```
 
+---
+
+## Contract: ConventionScanner.scan
+
+> **Python only** — ConventionScanner is not available in TypeScript or Rust SDKs.
+
+### Inputs
+- `commands_dir`: string or Path, required — directory containing Python command files to scan
+- `include`: string regex pattern, optional — module ID filter (see BaseScanner.filter_modules)
+- `exclude`: string regex pattern, optional — module ID filter
+
+### Errors
+- `FileNotFoundError` — `commands_dir` does not exist
+- `ImportError` — command file has an import that cannot be resolved
+- `re.error` — invalid `include` or `exclude` regex pattern
+
+### Returns
+- On success: `list[ScannedModule]` — one entry per discovered callable in `commands_dir`
+
+### Properties
+- async: false
+- pure: false (reads filesystem, imports modules — has sys.path side effects)
+- thread_safe: false (mutates sys.path during scan — not safe for concurrent calls)
+
+---
+
 ## Target Format
 
 Each `ScannedModule.target` is set to `{file_path}:{function_name}`, providing a locator that downstream executors can use to import and call the function.

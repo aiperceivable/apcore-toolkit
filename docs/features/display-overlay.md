@@ -2,6 +2,8 @@
 
 The `DisplayResolver` applies a sparse `binding.yaml` overlay to a list of `ScannedModule` objects, resolving surface-facing presentation fields — alias, description, guidance, tags, and documentation — into `metadata["display"]` for downstream CLI, MCP, and A2A consumers.
 
+The overlay is provided either as pre-parsed `binding_data` or a `binding_path` pointing at YAML file(s). `ScannedModule` also carries an independent [`display` field](#scannedmoduledisplay-field) (since 0.5.0) used by `YAMLWriter` and `BindingLoader` for round-trip persistence — `DisplayResolver` itself does not consume that field.
+
 ## Overview
 
 Scanners produce raw `ScannedModule` metadata from code. The display overlay layer sits between scanning and surface emission: it reads a `binding.yaml` (or a directory of `*.binding.yaml` files) and merges human-curated presentation overrides on top of the scanned values without modifying the underlying schema or target.
@@ -220,6 +222,64 @@ for m in resolved:
     display = m.metadata.get("display", {})
     print(m.module_id, "→", display.get("alias"), display.get("mcp", {}).get("alias"))
 ```
+
+## `ScannedModule.display` field
+
+Since `apcore-toolkit` 0.5.0, `ScannedModule` carries an optional top-level `display` field that holds the **sparse overlay** (the same shape users write in `binding.yaml`) — *not* the fully resolved form produced by `DisplayResolver`.
+
+```python
+# types.py
+display: dict[str, Any] | None = None
+```
+
+This field distinguishes two distinct pieces of data:
+
+| Field | Shape | Produced by | Consumed by |
+|-------|-------|-------------|-------------|
+| `ScannedModule.display` | **sparse overlay** — only keys the user wants to override (`{"mcp": {"alias": "x"}}`) | User (manually), `BindingLoader`, convention scanners | `YAMLWriter`, round-trip tooling |
+| `ScannedModule.metadata["display"]` | **resolved** — all surfaces expanded (`cli`/`mcp`/`a2a` complete) | `DisplayResolver.resolve()` | Surface adapters at render time |
+
+### Persistence via `YAMLWriter`
+
+When `module.display is not None`, `YAMLWriter` emits the overlay verbatim as a top-level `display:` key in the generated binding YAML. When `display is None`, the key is omitted entirely (keeps YAML clean).
+
+This enables full round-trip through `BindingLoader` → `YAMLWriter`: display overrides committed to YAML survive re-scanning as long as scanners merge their output with pre-existing binding files (or delegate persistence to the loader).
+
+### Relationship to `DisplayResolver`
+
+`DisplayResolver` is unchanged — it reads overlays from `binding_data`/`binding_path` and writes resolved forms to `metadata["display"]`. The new `display` field is a **separate, persistence-oriented slot**: `YAMLWriter` emits it, `BindingLoader` reads it back.
+
+Typical flow:
+
+1. Scanner produces `ScannedModule` with `display=None`.
+2. User hand-edits a `binding.yaml`, adding a `display:` section.
+3. `BindingLoader` loads YAML → `ScannedModule.display` populated.
+4. `YAMLWriter.write(modules)` re-emits YAML with `display` preserved verbatim.
+5. Separately, `DisplayResolver.resolve(modules, binding_path=...)` expands the overlay into `metadata["display"]` for surface adapters.
+
+To feed `DisplayResolver` from `ScannedModule.display`, pass it explicitly via `binding_data` (wrap in `{"bindings": [{"module_id": ..., "display": ...}, ...]}`).
+
+---
+
+## Contract: DisplayResolver.resolve
+
+### Inputs
+- `modules`: list of `ScannedModule`, required
+- `binding_path`: string or Path, optional — path to a `.binding.yaml` file or directory for loading display overlays
+- `binding_data`: dict/object, optional — in-memory binding data (alternative to `binding_path`)
+
+### Errors
+- `ValueError` (Python) / `Error` (TypeScript) / `Err(DisplayResolverError)` (Rust) — invalid binding format or conflicting resolution options
+
+### Returns
+- On success: list of `ScannedModule` with `.display` fields populated where overlay data was found; modules without matching overlay data have `display=None`
+
+### Properties
+- async: false
+- pure: false (reads filesystem if `binding_path` is provided)
+- idempotent: true (applying same overlay twice yields same result)
+
+---
 
 ## Integration with `simplify_ids`
 
