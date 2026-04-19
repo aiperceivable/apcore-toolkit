@@ -363,13 +363,13 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
 
 ### Errors
 - `WriteError` / `WriteError` — file system write failure
-- Re-raises verifier exceptions only if verifiers are not wrapped (TypeScript does not wrap; Python and Rust do)
+- All three SDKs wrap verifier results into `WriteResult.verification_error` (Python/Rust) / `WriteResult.verificationError` (TypeScript). Verifier exceptions are caught and stored as verification errors rather than being re-raised.
 
 ### Returns
 - On success: list of `WriteResult` — one per module; each has `module_id`, `path`, `ok`, `verified`, `verification_error`
 
 ### Properties
-- async: false (Python, Rust) / async: true (TypeScript — always `await writer.write(...)`)
+- async: false
 - pure: false (writes to filesystem unless dry_run=true)
 - idempotent: true (writing same modules twice produces same files)
 
@@ -386,13 +386,13 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
 
 ### Errors
 - `WriteError` — registration failure (e.g., registry rejected the module)
-- Re-raises verifier exceptions only if verifiers are not wrapped
+- All three SDKs wrap verifier results into `WriteResult.verification_error` (Python/Rust) / `WriteResult.verificationError` (TypeScript). Verifier exceptions are caught and stored as verification errors rather than being re-raised.
 
 ### Returns
 - On success: list of `WriteResult` — one per module; `path` is `None`/`null` (no file written)
 
 ### Properties
-- async: false (Python, Rust) / async: true (TypeScript — always `await writer.write(...)`)
+- async: false
 - pure: false (mutates registry unless dry_run=true)
 - idempotent: false (registering the same module_id twice may overwrite or raise depending on registry configuration)
 
