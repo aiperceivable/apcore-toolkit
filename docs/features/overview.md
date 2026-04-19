@@ -1,6 +1,6 @@
 # Features Overview
 
-`apcore-toolkit` is a collection of framework-agnostic utilities designed to help you extract, refine, and export metadata from your existing codebase, making it "AI-Perceivable". Available for both **Python** and **TypeScript**.
+`apcore-toolkit` is a collection of framework-agnostic utilities designed to help you extract, refine, and export metadata from your existing codebase, making it "AI-Perceivable". Available for **Python**, **TypeScript**, and **Rust**.
 
 ## Core Capabilities
 
@@ -10,6 +10,7 @@
 | **[OpenAPI Integration](openapi.md)** | Extract JSON Schemas directly from OpenAPI operation objects. |
 | **[Schema Utilities](pydantic.md)** | Flatten complex models (Pydantic / Zod) for easier AI interaction. |
 | **[Output Writers](output-writers.md)** | Export metadata to YAML bindings, source code wrappers, or direct Registry registration — with optional output verification. |
+| **[Binding Loader](binding-loader.md)** | Parse `.binding.yaml` files back into `ScannedModule` objects — the read-path counterpart to `YAMLWriter`. Supports strict and loose modes for verification, merging, and round-trip workflows. |
 | **[Formatting](formatting.md)** | Convert data structures into Markdown and enrich JSON Schema descriptions from docstrings. |
 | **[AI Enhancement](../ai-enhancement.md)** | Pluggable `Enhancer` protocol with built-in `AIEnhancer` for local SLMs; [apcore-refinery](https://github.com/aiperceivable/apcore-refinery) recommended for production. |
 | **[Display Overlay](display-overlay.md)** | Sparse `binding.yaml` overlay that resolves surface-facing alias, description, guidance, and tags into `metadata["display"]` for CLI, MCP, and A2A surfaces (§5.13). |
@@ -21,7 +22,7 @@
 - **Separation of Concerns**: Scanning (extraction), Schema Utilities (refinement), and Writers (export) are kept distinct.
 - **Developer First**: Focuses on automating the tedious tasks of writing `apcore.yaml` or `@module` decorators.
 - **AI-Native**: Built with the assumption that the ultimate consumer of this metadata is a Large Language Model (LLM) or AI agent.
-- **Dual-Language Parity**: Every feature is implementable in both Python and TypeScript.
+- **Cross-Language Parity**: Every core feature has matching implementations in Python, TypeScript, and Rust with idiomatic-per-language APIs and wire-format compatibility.
 
 ## Scope
 
