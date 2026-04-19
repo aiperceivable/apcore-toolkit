@@ -23,7 +23,7 @@ Unlike `apcore.BindingLoader` (which `import_module`s the `target` and registers
 
 | Method | Description |
 |--------|-------------|
-| `load(path, *, strict=False, recursive=False)` | Load a single `.binding.yaml` file or every `*.binding.yaml` in a directory. Python only: pass `recursive=True` to descend into subdirectories. |
+| `load(path, *, strict=False, recursive=False)` | Load a single `.binding.yaml` file or every `*.binding.yaml` in a directory. Python and Rust: pass `recursive=True` to descend into subdirectories. TypeScript always does a flat directory scan. |
 | `load_data(data, *, strict=False)` | Load pre-parsed YAML data (a `{"bindings": [...]}` dict). |
 
 Both return `list[ScannedModule]` (or `ScannedModule[]` / `Vec<ScannedModule>`).
@@ -161,7 +161,7 @@ Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — 
 ### Inputs
 - `path`: string or Path, required — path to a `.binding.yaml` file OR a directory containing `.binding.yaml` files
 - `strict`: bool, optional, default=false — if true, raises on any malformed binding entry
-- `recursive`: bool, optional, default=false — Python only: if true, walks subdirectories for `*.binding.yaml` files (TypeScript and Rust always do flat directory scan)
+- `recursive`: bool, optional, default=false — when `recursive=true`, Python and Rust walk subdirectories recursively for `*.binding.yaml` files. TypeScript performs a flat directory scan (recursive is not yet supported).
 
 ### Errors
 - `BindingLoadError` / `BindingLoadError` (Python raises, Rust returns `Err`) — path not found, YAML parse failure, or strict mode violation
