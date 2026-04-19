@@ -35,6 +35,9 @@ nav:
       - OpenAPI Integration: features/openapi.md
       - Schema Utilities: features/pydantic.md
       - Output Writers: features/output-writers.md
+      - Binding Loader: features/binding-loader.md
+      - Display Overlay: features/display-overlay.md
+      - Convention Scanning: features/convention-scanning.md
       - Formatting: features/formatting.md
   - AI Enhancement: ai-enhancement.md
   - Changelog: changelog.md
