@@ -2,6 +2,59 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-04-19
+
+Aligned release across Python, TypeScript, and Rust. Tracks apcore 0.19.0 features (expanded `ModuleAnnotations`, `display` field, declarative config spec).
+
+### Added
+
+- **`BindingLoader`** (three SDKs) — parses `.binding.yaml` files back into `ScannedModule` objects. Pure-data reader: no target import, no Registry side effects. Distinct from `apcore.BindingLoader` which does both. Enables verification, merging, diffing, and round-trip workflows.
+  - Loose mode (default): only `module_id + target` required.
+  - Strict mode: additionally requires `input_schema + output_schema`.
+  - `spec_version` validated; missing/unsupported values WARN but do not fail.
+  - Errors: `BindingLoadError` with `file_path`, `module_id`, `missing_fields`, `reason` (Rust: 5-variant `thiserror` enum).
+- **`ScannedModule.display`** (three SDKs) — new optional top-level field holding the sparse display overlay for binding YAML persistence. Distinct from `metadata["display"]` (resolved form produced by `DisplayResolver`).
+- **New feature doc**: `docs/features/binding-loader.md`.
+- **`docs/features/display-overlay.md`** — new section explaining the sparse-overlay vs resolved-display distinction, and the round-trip flow.
+- **`docs/features/output-writers.md`** — notes on conditional `display:` emission, `spec_version` stamping, and a Rust example.
+- **`docs/features/overview.md`** — Binding Loader entry; tri-language parity note.
+- **`mkdocs.yml`** nav — adds Binding Loader, Display Overlay, Convention Scanning entries.
+
+### Changed
+
+- **`YAMLWriter`** — emits top-level `display:` key only when `ScannedModule.display` is non-empty. Rust writer refactored from `json!` macro to `serde_json::Map` to support conditional keys.
+- **`serializers.module_to_dict / moduleToDict / module_to_value`** — include `display` field.
+- **Python `AIEnhancer._build_prompt`** — confidence template now built dynamically from `gaps`. When `annotations` is in gaps, requests per-field confidence for every validator key (`annotations.readonly`, `annotations.streaming`, `annotations.cache_ttl`, …). Previously hard-coded to `{"description": 0.0, "documentation": 0.0}`, which caused annotation-field confidence lookups to fall back to `0.0` and fail the threshold check — annotation enhancement silently never took effect.
+
+### Dependencies
+
+- **`apcore >= 0.19.0` / `apcore-js >= 0.19.0`** — picks up the expanded `ModuleAnnotations` (12 fields: adds `streaming`, `cacheable`, `cache_ttl`, `cache_key_fields`, `paginated`, `pagination_style`, `extra`), `FunctionModule.display`, and new binding/schema error types. No toolkit type changes were needed for annotations — reflection (Python), serde (Rust), and `annotationsFromJSON` (TypeScript) propagate new fields automatically.
+
+### Fixed (Rust)
+
+- **`output::registry_writer` / `http_proxy_writer`** — fixed pre-existing `ModuleDescriptor` initialization errors following the apcore 0.19.0 upgrade: adds required `display` field; updates `annotations` to `Option<ModuleAnnotations>`; fills all descriptor fields in `http_proxy_writer` (previously partial).
+
+### Tests
+
+| SDK | Δ tests | Total |
+|-----|---------|-------|
+| Python | +34 | 440 |
+| TypeScript | +29 | 320 |
+| Rust | +26 | 304 |
+
+All round-trip tests (`YAMLWriter.write` → `BindingLoader.load`) verify end-to-end preservation of `display`, `annotations` (12 fields), `metadata`, `examples`, and schemas.
+
+### Hardening (post-review)
+
+A code-forge:review pass on the 0.5.0 delta produced a short list of cross-SDK inconsistencies; they are fixed as part of this same release:
+
+- **Silent drop of malformed `display` values** — Python, TypeScript, and Rust all used to swallow non-mapping overlays without warning. All three SDKs now emit a WARN with the offending module_id and return `None`/`null`, matching the behaviour of `annotations`/`examples` parsers.
+- **`ScannedModule.display` defensive copy** — Python's `YAMLWriter` used to emit a bare reference (`binding["display"] = module.display`); it now deep-copies, matching TypeScript's `structuredClone` and Rust's `.clone()`.
+- **Python `ScannedModule.display` field position** — moved from the middle of the dataclass to the end, preserving positional construction compatibility with pre-0.5.0 callers.
+- **Python `BindingLoader` polish** — `load()` gained `recursive: bool = False`; `read_text` forces UTF-8; error wording changed from "missing required fields" to "missing or null required fields".
+- **TypeScript `BindingLoader` polish** — `_parseExamples` uses `structuredClone`; `fs.statSync` failures distinguish `ENOENT` from other `errno` codes.
+- **Rust `BindingLoader` polish** — `read_dir` per-entry errors are now surfaced as `BindingLoadError::FileRead` (previously silently discarded); `MissingFields`/`InvalidStructure` `Display` no longer leak `Some(...)` / `None` debug wrappers.
+
 ## [0.4.0] - 2026-03-23
 
 ### Added
