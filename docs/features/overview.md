@@ -24,6 +24,19 @@
 - **AI-Native**: Built with the assumption that the ultimate consumer of this metadata is a Large Language Model (LLM) or AI agent.
 - **Cross-Language Parity**: Every core feature has matching implementations in Python, TypeScript, and Rust with idiomatic-per-language APIs and wire-format compatibility.
 
+## SDK Parity
+
+Every core feature listed above ships in all three SDKs (Python, TypeScript, Rust) with idiomatic per-language APIs and wire-format compatibility. A small number of surfaces are intentionally single-language because they solve ecosystem-specific problems that have no direct counterpart elsewhere:
+
+| Surface | SDK | Why it is single-language |
+|---|---|---|
+| `flatten_pydantic_params` | Python | Unwraps Pydantic models into flat kwargs. TypeScript object arguments are already flat; Rust uses compile-time proc macros. See [`pydantic.md`](pydantic.md). |
+| `ConventionScanner` | Python | Uses Python's `importlib` to discover plain `.py` files in `commands/`. No `importlib` analogue exists in TypeScript/Rust. See [`convention-scanning.md`](convention-scanning.md). |
+| `_type_mapping` (internal) | Python | Internal helper supporting `flatten_pydantic_params`. Not public. |
+| `HTTPProxyRegistryWriter` | Python + TypeScript + Rust (feature `http-proxy`) | Rust is feature-gated to keep the default build free of an HTTP-client dependency. |
+| Code-generation writers | `PythonWriter` (Python), `TypeScriptWriter` (TypeScript), — (Rust) | Rust consumers import `apcore-toolkit` directly and work with the strongly-typed `ScannedModule` / registry APIs instead of generating source files. |
+| `safe-keys` (prototype-pollution guard) | TypeScript | JavaScript's prototype-chain semantics create this vulnerability class; Python and Rust are unaffected. |
+
 ## Scope
 
 For a detailed definition of what the toolkit does and does not do, see the [Scope & Boundaries](../scope.md) document.
