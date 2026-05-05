@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **`HTTPProxyRegistryWriter` SDK Parity row** (#12) — `docs/features/overview.md` SDK Parity table corrected to "Python + Rust (feature `http-proxy`)"; previously claimed TypeScript support, which contradicted the rest of `docs/features/output-writers.md` (heading, Contract block, and `get_writer()` factory table all already said Python + Rust only) and the actual TypeScript public surface.
+- **`HTTPProxyRegistryWriter` doc inconsistency** (#12) — `docs/features/output-writers.md` heading, Contract block, and `get_writer()` factory table now correctly list TypeScript alongside Python and Rust. `apcore-toolkit-typescript` has shipped `HTTPProxyRegistryWriter` since the `http-proxy` writer feature commit; the toolkit docs had not caught up. `docs/features/overview.md` SDK Parity table was already correct. The TypeScript build needs only Node 18+ for the global `fetch`; no extra install is required.
 
 ## [0.5.0] - 2026-04-21
 

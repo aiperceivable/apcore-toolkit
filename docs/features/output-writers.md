@@ -146,7 +146,7 @@ Directly registers the scanned modules into an active `apcore.Registry` instance
     writer.write(modules, registry, { dryRun: false });
     ```
 
-## `HTTPProxyRegistryWriter` (Python and Rust)
+## `HTTPProxyRegistryWriter` (Python, TypeScript, Rust)
 
 Registers scanned modules as HTTP proxy classes that forward requests to a running web API. This enables CLI execution without invoking route handlers directly (which depend on framework DI systems).
 
@@ -166,6 +166,14 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
     pip install apcore-toolkit[http-proxy]
     ```
 
+=== "TypeScript"
+
+    Bundled in `apcore-toolkit`; no extra install needed (uses Node 18+ built-in `fetch`):
+
+    ```bash
+    npm install apcore-toolkit
+    ```
+
 === "Rust"
 
     Enable the `http-proxy` Cargo feature (adds a `reqwest` dependency):
@@ -174,8 +182,6 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
     [dependencies]
     apcore-toolkit = { git = "https://github.com/aiperceivable/apcore-toolkit-rust", features = ["http-proxy"] }
     ```
-
-TypeScript does not ship an HTTP proxy writer; use the standard `RegistryWriter` with a client-side HTTP forwarder if that workflow is needed.
 
 ### Usage
 
@@ -191,6 +197,20 @@ TypeScript does not ship an HTTP proxy writer; use the standard `RegistryWriter`
         auth_header_factory=lambda: {"Authorization": "Bearer xxx"},
     )
     writer.write(modules, registry)
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { Registry } from "apcore-js";
+    import { HTTPProxyRegistryWriter } from "apcore-toolkit";
+
+    const registry = new Registry();
+    const writer = new HTTPProxyRegistryWriter({
+      baseUrl: "http://localhost:8000",
+      authHeaderFactory: () => ({ Authorization: "Bearer xxx" }),
+    });
+    await writer.write(modules, registry);
     ```
 
 === "Rust"
@@ -223,7 +243,7 @@ TypeScript does not ship an HTTP proxy writer; use the standard `RegistryWriter`
 ### Properties
 - async: false
 - pure: false (mutates registry)
-- availability: Python (always — requires `httpx`; install with `apcore-toolkit[http-proxy]`) and Rust (behind the `http-proxy` Cargo feature — adds a `reqwest` dependency). TypeScript does not ship an HTTP proxy writer.
+- availability: Python (requires `httpx`; install with `apcore-toolkit[http-proxy]`), TypeScript (requires Node 18+ for built-in `fetch`; ships in `apcore-toolkit` with no extra install), and Rust (behind the `http-proxy` Cargo feature — adds a `reqwest` dependency).
 
 ---
 
@@ -239,7 +259,7 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 | `"python"` | `PythonWriter` instance | Python |
 | `"typescript"` | `TypeScriptWriter` instance | TypeScript |
 | `"registry"` | `RegistryWriter` instance | Both |
-| `"http-proxy"` | `HTTPProxyRegistryWriter` instance | Python, Rust (feature `http-proxy`) |
+| `"http-proxy"` | `HTTPProxyRegistryWriter` instance | Python, TypeScript, Rust (feature `http-proxy`) |
 
 === "Python"
 
