@@ -11,7 +11,7 @@
 | **[Schema Utilities](pydantic.md)** | Flatten complex models (Pydantic / Zod) for easier AI interaction. |
 | **[Output Writers](output-writers.md)** | Export metadata to YAML bindings, source code wrappers, or direct Registry registration — with optional output verification. |
 | **[Binding Loader](binding-loader.md)** | Parse `.binding.yaml` files back into `ScannedModule` objects — the read-path counterpart to `YAMLWriter`. Supports strict and loose modes for verification, merging, and round-trip workflows. |
-| **[Formatting](formatting.md)** | Convert data structures into Markdown and enrich JSON Schema descriptions from docstrings. |
+| **[Formatting](formatting.md)** | Convert data structures into Markdown, enrich JSON Schema descriptions from docstrings, and render `ScannedModule` for specific consumer surfaces (`format_module` / `format_schema` / `format_modules` — markdown / skill / table-row / json styles). |
 | **[AI Enhancement](../ai-enhancement.md)** | Pluggable `Enhancer` protocol with built-in `AIEnhancer` for local SLMs; [apcore-refinery](https://github.com/aiperceivable/apcore-refinery) recommended for production. |
 | **[Display Overlay](display-overlay.md)** | Sparse `binding.yaml` overlay that resolves surface-facing alias, description, guidance, and tags into `metadata["display"]` for CLI, MCP, and A2A surfaces (§5.13). |
 | **[Convention Scanning](convention-scanning.md)** | Scan a `commands/` directory of plain Python files for public functions, inferring schemas from type annotations -- zero decorators, zero imports (§5.14). |
@@ -33,7 +33,7 @@ Every core feature listed above ships in all three SDKs (Python, TypeScript, Rus
 | `flatten_pydantic_params` | Python | Unwraps Pydantic models into flat kwargs. TypeScript object arguments are already flat; Rust uses compile-time proc macros. See [`pydantic.md`](pydantic.md). |
 | `ConventionScanner` | Python | Uses Python's `importlib` to discover plain `.py` files in `commands/`. No `importlib` analogue exists in TypeScript/Rust. See [`convention-scanning.md`](convention-scanning.md). |
 | `_type_mapping` (internal) | Python | Internal helper supporting `flatten_pydantic_params`. Not public. |
-| `HTTPProxyRegistryWriter` | Python + TypeScript + Rust (feature `http-proxy`) | Rust is feature-gated to keep the default build free of an HTTP-client dependency. |
+| `HTTPProxyRegistryWriter` | Python + Rust (feature `http-proxy`) | Rust is feature-gated to keep the default build free of an HTTP-client dependency. TypeScript does not ship an HTTP proxy writer. |
 | Code-generation writers | `PythonWriter` (Python), `TypeScriptWriter` (TypeScript), — (Rust) | Rust consumers import `apcore-toolkit` directly and work with the strongly-typed `ScannedModule` / registry APIs instead of generating source files. |
 | `safe-keys` (prototype-pollution guard) | TypeScript | JavaScript's prototype-chain semantics create this vulnerability class; Python and Rust are unaffected. |
 
