@@ -228,6 +228,9 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
     writer.write(&modules, &mut registry);
     ```
 
+!!! info "Constructor parameter naming"
+    Each SDK names the timeout parameter idiomatically for its language: Python `timeout: float = 60.0` (seconds), Rust `timeout_secs: f64` (seconds; constructor returns `Err(InvalidTimeout)` if non-positive or non-finite), TypeScript `timeoutMs: number = 60_000` (milliseconds; default is 60 seconds). Default behavior is identical at 60 s; cross-language porters MUST translate the unit when explicitly passing a value.
+
 ## Contract: HTTPProxyRegistryWriter.write
 
 ### Inputs
@@ -287,8 +290,8 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 ### Inputs
 - `format`: string, required — output format name. Supported values per SDK:
   - Python: `"yaml"`, `"python"`, `"registry"`, `"http-proxy"` — raises `ValueError` for anything else
-  - TypeScript: `"yaml"`, `"typescript"`, `"registry"` — raises `InvalidFormatError` for anything else; `"http-proxy"` is not available in TypeScript
-  - Rust: returns `OutputFormat` enum variant (not a writer instance — idiomatic Rust divergence). Supported variants: `Yaml`, `Registry`, and (with the `http-proxy` Cargo feature) `HttpProxy`; accepts the aliases `"http_proxy"`, `"http-proxy"`, and `"httpproxy"`. Returns `None` for unknown formats rather than raising.
+  - TypeScript: `"yaml"`, `"typescript"`, `"registry"`, `"http-proxy"` (also accepts the alias `"http_proxy"`) — raises `InvalidFormatError` for anything else. `"http-proxy"` requires `options.baseUrl` and throws `TypeError` if it is missing.
+  - Rust: returns `OutputFormat` enum variant (not a writer instance — idiomatic Rust divergence). Supported variants: `Yaml`, `Registry`, and (with the `http-proxy` Cargo feature) `HttpProxy`; accepts the aliases `"http_proxy"`, `"http-proxy"`, and `"httpproxy"`. Returns `Err(OutputFormatError::Unknown)` for unknown formats.
 - Additional keyword args (Python only): forwarded to the writer constructor (e.g., `base_url` for `"http-proxy"`)
 
 ### Errors
