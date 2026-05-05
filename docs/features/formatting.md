@@ -133,6 +133,14 @@ The `display` flag (default `true`) honours the `ScannedModule.display` overlay 
 
 When `style="markdown"` or `style="skill"`, the formatter MUST emit `ModuleAnnotations` as a plain Markdown table of fact rows (not as imperative English sentences) — translating "readonly = true" into "this module does not modify state" is a localisation decision the toolkit does not own. LLMs and downstream renderers can interpret a fact table in any language.
 
+The fact table MUST contain **only fields that differ from `ModuleAnnotations` defaults**. Implementations construct a default `ModuleAnnotations` instance, serialise both it and the module's annotations via `annotations_to_dict` (snake_case wire form), and emit only entries where the module's value differs from the default. The `extra` free-form bag is always skipped.
+
+Rows MUST be sorted alphabetically by key (snake_case). Boolean values MUST be rendered as lowercase `true` / `false`. Numbers, strings, arrays, and objects render via the language's natural JSON conversion (e.g. `300`, `cursor`, `["id"]`, `{"region": "us"}`).
+
+If every annotation field equals its default (or `annotations` is `null`), the entire `## Behavior` section is omitted.
+
+This three-rule alignment (default-comparison + alphabetical + lowercase bool) is what makes `format_module(module, style="markdown")` produce byte-identical output across the three SDKs for the same `ScannedModule` fixture.
+
 ### Example
 
 === "Python"
