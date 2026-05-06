@@ -162,13 +162,11 @@ Python and TypeScript loaders do not currently enforce these caps. Callers in th
 ## Contract: BindingLoader.load_data
 
 ### Inputs
-- `data`: dict or list[dict], required — pre-parsed YAML content. Accepts either:
-  - A dict with a `"bindings"` key containing a list of binding entries
-  - A list of binding entry dicts directly
+- `data`: dict, required — pre-parsed YAML content. Must be a dict with a `"bindings"` key containing a list of binding entries (e.g., `{"bindings": [{...}, {...}]}`). A bare list is rejected with `BindingLoadError`.
 - `strict`: bool, optional, default=false — if true, raises `BindingLoadError` on missing required fields (`input_schema`, `output_schema`)
 
 ### Errors
-- `BindingLoadError` (Python raises, TypeScript throws, Rust returns `Err`) — invalid structure, missing `bindings` key, or strict-mode violation
+- `BindingLoadError` (Python raises, TypeScript throws, Rust returns `Err`) — top-level value is not a mapping, missing `bindings` key, invalid entry structure, or strict-mode violation
 
 ### Returns
 - On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>`

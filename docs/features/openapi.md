@@ -130,11 +130,11 @@ Both `extract_input_schema` and `extract_output_schema` call `deep_resolve_refs`
 - `doc` / `spec`: dict, required — the full OpenAPI spec document to resolve within
 
 ### Errors
-- None raised — returns `None`/`null` if the reference path is not found in the document
+- None raised — returns an empty dict/object (`{}`) if the reference path is not found, the resolved value is not an object, or any pointer segment cannot be traversed.
 
 ### Returns
 - On success: dict — the resolved schema at the referenced path
-- On missing: `None` / `null`
+- On missing or non-object resolution: empty dict/object (`{}`). Distinguish "missing" from "explicitly empty" by walking the parent path with a membership check if needed.
 
 ### Properties
 - async: false
