@@ -180,11 +180,18 @@ Scanners often encounter naming collisions (e.g., `GET /users` and `POST /users`
 
 ## Behavioral Inference
 
-`infer_annotations_from_method()` provides a sensible default for mapping HTTP verbs to apcore's `ModuleAnnotations`:
-- `GET` → `readonly=True, cacheable=True`
-- `DELETE` → `destructive=True`
-- `PUT` → `idempotent=True`
-- Others → Default (all False)
+`infer_annotations_from_method()` provides a sensible default for mapping HTTP verbs to apcore's `ModuleAnnotations`. The mapping is derived from RFC 9110 method semantics — methods declared safe by the spec map to `readonly`, idempotent-but-not-safe methods map to `idempotent`, and methods with the `destructive` flag are those whose intended effect is removal.
+
+| HTTP method | Annotation |
+|---|---|
+| `GET` | `readonly=True`, `cacheable=True` |
+| `HEAD` | `readonly=True` |
+| `OPTIONS` | `readonly=True` |
+| `PUT` | `idempotent=True` |
+| `DELETE` | `destructive=True` |
+| `POST`, `PATCH`, others | default (all flags false) |
+
+Implementations MUST honour this canonical mapping so a scanner emitting modules from one SDK and a registry consuming them from another agree on `readonly`/`destructive`/`idempotent` flags.
 
 For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer-behavioral-annotations) above and the [AI Enhancement](../ai-enhancement.md) module.
 
@@ -248,13 +255,28 @@ For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer
 ## Contract: BaseScanner.infer_annotations_from_method
 
 ### Inputs
-- `method`: string HTTP verb (e.g., `"GET"`, `"POST"`, `"DELETE"`, `"PUT"`), required
+- `method`: string HTTP verb (e.g., `"GET"`, `"POST"`, `"DELETE"`, `"PUT"`), required — case-insensitive; implementations MUST upper-case before matching
 
 ### Errors
 - None raised — unknown methods return default annotations (all fields false/None)
 
+### Canonical Mapping
+
+Implementations MUST produce the following annotation flags. All other flags default to false/None.
+
+| Method | Output flags |
+|---|---|
+| `GET` | `readonly=true`, `cacheable=true` |
+| `HEAD` | `readonly=true` |
+| `OPTIONS` | `readonly=true` |
+| `PUT` | `idempotent=true` |
+| `DELETE` | `destructive=true` |
+| `POST`, `PATCH`, others | default (all false) |
+
+Rationale: the mapping mirrors RFC 9110 §9.2 (safe methods → `readonly`) and §9.2.2 (idempotent methods that mutate → `idempotent`). `HEAD` and `OPTIONS` are safe by spec, so they receive `readonly=true` without `cacheable=true` (their responses are not generally cacheable for application-level use).
+
 ### Returns
-- On success: `ModuleAnnotations` instance with `readonly`, `cacheable`, `destructive`, `idempotent` set based on HTTP method heuristics
+- On success: `ModuleAnnotations` instance per the canonical mapping above
 
 ### Properties
 - async: false

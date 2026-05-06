@@ -227,6 +227,9 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
     writer.write(&modules, &mut registry);
     ```
 
+!!! info "Constructor parameter naming"
+    Each SDK names the timeout parameter idiomatically for its language: Python `timeout: float = 60.0` (seconds), Rust `timeout_secs: f64` (seconds; constructor returns `Err(InvalidTimeout)` if non-positive or non-finite), TypeScript `timeoutMs: number = 60_000` (milliseconds; default is 60 seconds). Default behavior is identical at 60 s; cross-language porters MUST translate the unit when explicitly passing a value.
+
 ## Contract: HTTPProxyRegistryWriter.write
 
 ### Inputs

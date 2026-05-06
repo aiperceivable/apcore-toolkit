@@ -7,17 +7,17 @@ This guide walks you through installing **apcore-toolkit** and using its core mo
 === "Python"
 
     - **Python**: 3.11+
-    - **apcore**: 0.19.0+
+    - **apcore**: 0.20.0+
 
 === "TypeScript"
 
     - **Node.js**: 18+
-    - **apcore**: 0.19.0+
+    - **apcore**: 0.20.0+
 
 === "Rust"
 
     - **Rust**: 1.70+ (edition 2021)
-    - **apcore**: 0.19.0+
+    - **apcore**: 0.20.0+
 
 ---
 

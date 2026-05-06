@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [0.6.0] - 2026-05-05
+
+Aligned release across Python, TypeScript, and Rust. Adds surface-aware formatters (LLM markdown / SKILL.md / CLI table-row / JSON), declares the canonical HTTP-method → annotations mapping, and bumps the required apcore runtime to 0.20.0.
+
+### Changed
+
+- **Required runtime bumped to apcore 0.20.0** — `README.md` badge and `docs/getting-started.md` prerequisites updated from `apcore 0.19.0+` to `apcore 0.20.0+`. Toolkit only consumes apcore's stable surface (`ModuleAnnotations`, `Registry`, `ModuleExample`, `parse_docstring`, `Module`, `Context`, `errors`, `jsonSchemaToTypeBox`, `annotationsFromJSON`/`annotationsToJSON`); none of those touched the 0.19 → 0.20 changes (which were focused on `OverridesStore`, `SubscriberFactory`, `StepMiddleware`, schema/system-modules hardening, plus `CircuitOpenError` → `CircuitBreakerOpenError` rename and `TaskStore.put` → `save` rename — all out of toolkit's reach). All three SDKs continue to pass full test suites (Python 585 / TypeScript 490 / Rust 380).
+
+### Added
+
+- **Surface-aware formatters** (#13) — `format_module`, `format_schema`, `format_modules` for rendering `ScannedModule` and JSON Schema for specific consumer surfaces. Four styles: `markdown` (LLM context), `skill` (drop-in `.claude/skills/<id>/SKILL.md` or `.gemini/skills/<id>/SKILL.md` body with minimal `name` + `description` frontmatter — no vendor-specific extensions), `table-row` (CLI listing), `json` (programmatic). Replaces the ad-hoc `to_markdown(asdict(module))` pattern downstream surfaces were using. Spec: `docs/features/formatting.md`.
+- **Annotation-table cross-SDK alignment** (#13 follow-up) — `format_module(style="markdown" | "skill")` now emits the `## Behavior` fact table identically across Python / TypeScript / Rust: only fields that differ from `ModuleAnnotations` defaults are listed, rows are sorted alphabetically by key, and bool values render as lowercase `true` / `false`. The `## Behavior` section is omitted entirely when every annotation field equals its default. This closes the byte-equality gap surfaced by the original cross-SDK verification step.
+
+### Changed
+
+- **`infer_annotations_from_method` canonical mapping** (#11) — spec now declares `HEAD` and `OPTIONS` MUST map to `readonly=true` (without `cacheable=true`), aligning with RFC 9110 §9.2 safe-method semantics. Closes a Python/TypeScript ↔ Rust divergence where Rust already returned `readonly=true` for these methods while Python and TypeScript returned default annotations. Spec: `docs/features/scanning.md`.
+
+### Fixed
+
+- **`HTTPProxyRegistryWriter` doc inconsistency** (#12) — `docs/features/output-writers.md` heading, Contract block, and `get_writer()` factory table now correctly list TypeScript alongside Python and Rust. `apcore-toolkit-typescript` has shipped `HTTPProxyRegistryWriter` since the `http-proxy` writer feature commit; the toolkit docs had not caught up. `docs/features/overview.md` SDK Parity table was already correct. The TypeScript build needs only Node 18+ for the global `fetch`; no extra install is required.
+- **`Contract: get_writer` Inputs alignment** (sync follow-up) — `docs/features/output-writers.md` `Contract: get_writer` Inputs paragraph for TypeScript was still asserting "`http-proxy` is not available in TypeScript" (residue from the original #12 misdirection); corrected to list `"http-proxy"` / `"http_proxy"` and the `options.baseUrl` requirement. Rust paragraph clarified to surface `Err(OutputFormatError::Unknown)` rather than the imprecise "returns `None`".
+- **`HTTPProxyRegistryWriter` constructor unit divergence** (sync follow-up) — added an admonition under the constructor docs noting that Python uses `timeout: float = 60.0` (seconds), Rust uses `timeout_secs: f64` (seconds, validated non-zero finite), and TypeScript uses `timeoutMs: number = 60_000` (milliseconds, default 60 s). Default behavior is identical; cross-language porters MUST translate units when passing an explicit value.
+
 ## [0.5.0] - 2026-04-21
 
 Aligned release across Python, TypeScript, and Rust. Tracks apcore 0.19.0 features (expanded `ModuleAnnotations`, `display` field, declarative config spec).
