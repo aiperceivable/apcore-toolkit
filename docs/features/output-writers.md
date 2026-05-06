@@ -172,11 +172,14 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
 
 === "Rust"
 
-    Enable the `http-proxy` Cargo feature (adds a `reqwest` dependency):
+    Enabled by default — a plain dependency declaration is enough:
 
     ```toml
     [dependencies]
-    apcore-toolkit = { git = "https://github.com/aiperceivable/apcore-toolkit-rust", features = ["http-proxy"] }
+    apcore-toolkit = { git = "https://github.com/aiperceivable/apcore-toolkit-rust" }
+
+    # To opt out (omit the `reqwest` dependency for lean builds):
+    apcore-toolkit = { git = "https://github.com/aiperceivable/apcore-toolkit-rust", default-features = false }
     ```
 
 ### Usage
@@ -231,7 +234,7 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
 - `registry`: `apcore.Registry` (Python) / `Registry` (TypeScript, from `apcore-js`) / `&mut apcore::Registry` (Rust), required — the live registry to register HTTP proxy modules into
 
 ### Errors
-- `WriteError(path, cause)` — registry rejection or target validation failure. HTTP requests themselves are issued later (at module call-time), not during `write`; `write` only registers proxy wrappers.
+- None raised. Per-module failures (registry rejection, target validation, proxy-class build error) are captured into a failed `WriteResult` (Python: `verified=False, verification_error=...`; TypeScript: `createWriteResult(..., false, msg)`; Rust: `WriteResult::failed(...)`) and returned in the result list, so one failing module does not abort the batch. HTTP requests themselves are issued later, at module call-time — not during `write`. Callers should iterate the returned list and check each entry's `verified` field.
 
 ### Returns
 - On success: list of `WriteResult` — `path` is `None`/`null` (no file written)
@@ -239,7 +242,7 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
 ### Properties
 - async: false
 - pure: false (mutates registry)
-- availability: Python (always — requires `httpx`; install with `apcore-toolkit[http-proxy]`), TypeScript (included in the standard package; uses global `fetch` — available in Node.js 20+, browsers, Deno, and workers), and Rust (behind the `http-proxy` Cargo feature — adds a `reqwest` dependency).
+- availability: Python (always — requires `httpx`; install with `apcore-toolkit[http-proxy]`), TypeScript (included in the standard package; uses global `fetch` — available in Node.js 20+, browsers, Deno, and workers), and Rust (the `http-proxy` Cargo feature is enabled by default so a vanilla dependency declaration exposes `HTTPProxyRegistryWriter`; opt out with `default-features = false` for lean builds).
 
 ---
 
@@ -285,7 +288,7 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 - `format`: string, required — output format name. Supported values per SDK:
   - Python: `"yaml"`, `"python"`, `"registry"`, `"http-proxy"` — raises `ValueError` for anything else
   - TypeScript: `"yaml"`, `"typescript"`, `"registry"`, `"http-proxy"` — raises `InvalidFormatError` for anything else
-  - Rust: returns `OutputFormat` enum variant (not a writer instance — idiomatic Rust divergence). Supported variants: `Yaml`, `Registry`, and (with the `http-proxy` Cargo feature) `HttpProxy`; accepts the aliases `"http_proxy"`, `"http-proxy"`, and `"httpproxy"`. Returns `None` for unknown formats rather than raising.
+  - Rust: returns `Result<OutputFormat, OutputFormatError>` (not a writer instance — idiomatic Rust divergence). Supported variants: `Yaml`, `Registry`, and (with the `http-proxy` Cargo feature) `HttpProxy`; accepts the aliases `"http_proxy"`, `"http-proxy"`, and `"httpproxy"`. Unknown formats yield `Err(OutputFormatError::Unknown(format))`, mirroring Python's typed `InvalidFormatError` and TypeScript's `InvalidFormatError`.
 - Additional keyword args (Python only): forwarded to the writer constructor (e.g., `base_url` for `"http-proxy"`)
 
 ### Errors
@@ -366,11 +369,9 @@ N/A — exception classes are not called and do not return values.
 
 ---
 
-## Contract: BuiltInVerifiers
+## Built-In Verifiers Overview
 
-All built-in verifiers implement the `Verifier` protocol. Each reads the artifact and checks well-formedness. None raises — failures are returned as `VerifyResult(ok=False, error=...)`.
-
-Each verifier class implements the Verifier interface. See individual Contract blocks below for per-class specs.
+All built-in verifiers implement the `Verifier` protocol. Each reads the artifact and checks well-formedness. **None raises** — failures are returned as `VerifyResult(ok=False, error=...)`. The five built-in classes each have their own Contract block below.
 
 | Verifier | Used By | Checks |
 |----------|---------|--------|
@@ -380,9 +381,94 @@ Each verifier class implements the Verifier interface. See individual Contract b
 | `MagicBytesVerifier` | (custom use) | File header matches expected format signature |
 | `JSONVerifier` | (custom use) | File parses as valid JSON; optional schema validation |
 
-### Properties
-- async: false (all built-in verifiers)
-- pure: false (reads filesystem or registry)
+### Contract: YAMLVerifier.verify
+
+#### Inputs
+- `path`: string, required — filesystem path to the YAML artifact. An empty string is treated as a registry-backed module (skipped gracefully — returns ok=true).
+- `module_id`: string, required — module ID being verified.
+
+#### Errors
+- None raised. Failure modes (file not found, malformed YAML, missing `module_id`/`target` keys) are returned as `VerifyResult(ok=False, error="...")`.
+
+#### Returns
+- On success: `VerifyResult(ok=True)`.
+- On verification failure: `VerifyResult(ok=False, error="<reason>")`.
+
+#### Properties
+- async: false
+- pure: false (reads filesystem)
+- thread_safe: true
+
+### Contract: SyntaxVerifier.verify
+
+#### Inputs
+- `path`: string, required — filesystem path to the source artifact (`.py` or `.ts`). An empty string is skipped gracefully.
+- `module_id`: string, required.
+
+#### Errors
+- None raised. Failure modes (file not found, parse / AST error, TypeScript compiler diagnostic) are returned as `VerifyResult(ok=False, error="...")`.
+
+#### Returns
+- On success: `VerifyResult(ok=True)`.
+- On parse failure: `VerifyResult(ok=False, error="<reason>")`.
+
+#### Properties
+- async: false
+- pure: false (reads filesystem; may invoke a subprocess for TS)
+- thread_safe: true
+
+### Contract: RegistryVerifier.verify
+
+#### Inputs
+- `path`: string, required — ignored by this verifier; pass `""` for registry-backed modules.
+- `module_id`: string, required — looked up in the supplied `registry`.
+
+#### Errors
+- None raised. Failure mode (`registry.get(module_id)` returns null/`None`) is returned as `VerifyResult(ok=False, error="Module \"<id>\" not found in registry")`. If the registry instance does not expose a `getModule` method, the verifier returns `VerifyResult(ok=False, error="Registry does not have a getModule method")`.
+
+#### Returns
+- On success: `VerifyResult(ok=True)`.
+- On absence: `VerifyResult(ok=False, error="<reason>")`.
+
+#### Properties
+- async: false
+- pure: false (reads from the registry)
+- thread_safe: true (reads only)
+
+### Contract: MagicBytesVerifier.verify
+
+#### Inputs
+- `path`: string, required — filesystem path to the artifact. An empty string is skipped gracefully.
+- `module_id`: string, required.
+
+#### Errors
+- None raised. Failure modes (file not found, header mismatch with expected signature) are returned as `VerifyResult(ok=False, error="...")`.
+
+#### Returns
+- On success: `VerifyResult(ok=True)`.
+- On signature mismatch: `VerifyResult(ok=False, error="<reason>")`.
+
+#### Properties
+- async: false
+- pure: false (reads filesystem)
+- thread_safe: true
+
+### Contract: JSONVerifier.verify
+
+#### Inputs
+- `path`: string, required — filesystem path to the JSON artifact. An empty string is skipped gracefully.
+- `module_id`: string, required.
+
+#### Errors
+- None raised. Failure modes (file not found, malformed JSON, optional schema validation failure) are returned as `VerifyResult(ok=False, error="...")`.
+
+#### Returns
+- On success: `VerifyResult(ok=True)`.
+- On parse / schema failure: `VerifyResult(ok=False, error="<reason>")`.
+
+#### Properties
+- async: false
+- pure: false (reads filesystem)
 - thread_safe: true
 
 ---
@@ -552,7 +638,7 @@ results = writer.write(
 
 ### Inputs
 - `verifiers`: list of `Verifier` / `Verifier[]` / `&[Box<dyn Verifier>]`, required — ordered chain of verifiers to run
-- `path`: string | Path | None (Python) / `string | null` (TypeScript) / `Option<&Path>` (Rust), required — passed to each `verifier.verify(path, module_id)`; `None`/`null` is valid for Registry-backed artifacts (no file)
+- `path`: string, required — passed to each `verifier.verify(path, module_id)`. For Registry-backed artifacts that have no on-disk file, callers pass the empty string `""` (the convention used by `RegistryWriter` itself, see `output/registry_writer`). Built-in file-based verifiers (`YAMLVerifier`, `JSONVerifier`, `MagicBytesVerifier`, `SyntaxVerifier`) skip gracefully when `path` is `""`. All three SDKs share this signature: Python `str`, TypeScript `string`, Rust `&str`.
 - `module_id` / `moduleId`: string, required — module ID passed to each verifier for error context
 
 ### Errors

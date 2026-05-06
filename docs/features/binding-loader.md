@@ -249,6 +249,42 @@ The TypeScript implementation splits binding loading into two classes for browse
 - **`parseBindingDocument(content: string): BindingDocument`** — standalone function wrapping BindingParser for callers that don't need class instantiation.
 - **`BindingLoader`** — extends BindingParser with Node.js filesystem I/O (`load(path, strict?, recursive?)`). Available via the main entry point only.
 
+### Contract: BindingParser.parse (TypeScript only)
+
+#### Inputs
+- `content`: string, required — the raw YAML text of a binding document (the contents of a `.binding.yaml` file). Must be valid YAML and the top-level value must be a mapping.
+
+#### Errors
+- `BindingLoadError` (TypeScript throws) — content is not valid YAML, the top-level value is not a mapping, the `bindings` key is missing or not an array, an entry is missing required fields, or strict-mode validation fails.
+
+#### Returns
+- On success: `BindingDocument` (a parsed in-memory representation listing all binding entries).
+- On failure: throws `BindingLoadError`.
+
+#### Properties
+- async: false
+- pure: true (no filesystem access — operates purely on the input string)
+- thread_safe: true
+
+### Contract: parseBindingDocument (TypeScript only)
+
+A standalone function that constructs a transient `BindingParser` and calls `parse(content)` once. Provided so callers that do not need to retain a parser instance can avoid the boilerplate. Behaviour, errors, and properties are identical to `BindingParser.parse` above — this is a thin wrapper.
+
+#### Inputs
+- `content`: string, required — see `BindingParser.parse`.
+
+#### Errors
+- `BindingLoadError` (TypeScript throws) — see `BindingParser.parse`.
+
+#### Returns
+- On success: `BindingDocument`.
+- On failure: throws `BindingLoadError`.
+
+#### Properties
+- async: false
+- pure: true
+- thread_safe: true
+
 ### Browser / Edge Runtime Subpath
 
 The package exports a `apcore-toolkit/browser` subpath that includes only:
