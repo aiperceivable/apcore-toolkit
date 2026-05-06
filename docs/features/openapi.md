@@ -12,7 +12,7 @@ The toolkit handles the extraction and merging of OpenAPI operation parameters i
 | `extract_output_schema(op, doc)` | Extracts response schema for `200` or `201` status codes. Recursively resolves all nested `$ref`. |
 | `resolve_ref(ref_string, doc)` | Resolves a single internal JSON pointer reference (e.g., `#/components/schemas/User`). |
 | `resolve_schema(schema, doc)` | If the schema contains a top-level `$ref`, resolves it (single level only). |
-| `deep_resolve_refs(schema, doc)` | Recursively resolves all `$ref` pointers in a schema, including nested `allOf`/`anyOf`/`oneOf`, `items`, and `properties`. Depth-limited to 16 levels. |
+| `deep_resolve_refs(schema, doc)` | Recursively resolves all `$ref` pointers in a schema, including nested `allOf`, `anyOf`, `oneOf`, `items` (single schema), `properties`, `additionalProperties` (when schema), `patternProperties`, `not`, `if`, `then`, `else`, `prefixItems`, and tuple-form `items` (array of schemas). Depth-limited to 16 levels. |
 
 ## Parameter Merging
 
@@ -79,7 +79,7 @@ The toolkit provides three levels of `$ref` resolution:
 
 1. **`resolve_ref(ref_string, doc)`** — Resolves a single JSON pointer (e.g., `#/components/schemas/User`) to the referenced schema dict.
 2. **`resolve_schema(schema, doc)`** — If the top-level schema contains `$ref`, resolves it once. Returns inline schemas unchanged.
-3. **`deep_resolve_refs(schema, doc)`** / **`deepResolveRefs(schema, doc)`** — Recursively walks the entire schema tree, resolving `$ref` inside `properties`, `allOf`/`anyOf`/`oneOf`, and `items`. Depth-limited to 16 levels to prevent infinite recursion on circular references.
+3. **`deep_resolve_refs(schema, doc)`** / **`deepResolveRefs(schema, doc)`** — Recursively walks the entire schema tree, resolving `$ref` inside the following keywords: `allOf`, `anyOf`, `oneOf`, `items` (single schema), `properties`, `additionalProperties` (when it is a schema object, not a boolean), `patternProperties`, `not`, `if`, `then`, `else`, `prefixItems`, and tuple-form `items` (array of schemas). Depth-limited to 16 levels to prevent infinite recursion on circular references. This is the canonical behavior across all three SDKs after Python and TypeScript fixes are applied.
 
 Both `extract_input_schema` and `extract_output_schema` call `deep_resolve_refs` internally, so callers get fully resolved schemas by default.
 
@@ -163,7 +163,7 @@ Both `extract_input_schema` and `extract_output_schema` call `deep_resolve_refs`
 ## Contract: deep_resolve_refs
 
 ### Inputs
-- `schema`: dict, required — a schema object (may contain nested `$ref`, `properties`, `allOf`/`anyOf`/`oneOf`, `items`)
+- `schema`: dict, required — a schema object (may contain nested `$ref` and any of the following keywords: `allOf`, `anyOf`, `oneOf`, `items` (single schema), `properties`, `additionalProperties` (when schema), `patternProperties`, `not`, `if`, `then`, `else`, `prefixItems`, tuple-form `items` (array of schemas))
 - `doc` / `spec`: dict, required — the full OpenAPI spec document
 - `depth`: int, optional, default=0 — internal recursion depth counter (callers should not set this)
 
@@ -171,10 +171,11 @@ Both `extract_input_schema` and `extract_output_schema` call `deep_resolve_refs`
 - None raised — returns the schema unchanged when `depth > 16` to prevent infinite recursion
 
 ### Returns
-- On success: dict — fully resolved schema with all `$ref` pointers inlined (up to 16 levels deep)
+- On success: dict — fully resolved schema with all `$ref` pointers inlined (up to 16 levels deep), with all of the above listed keywords recursively walked
 
 ### Properties
 - async: false
 - pure: true
 - idempotent: true (calling twice on an already-resolved schema is a no-op)
 - depth_limit: 16
+- note: This is the canonical behavior as implemented in all three SDKs after the Python and TypeScript fixes are applied.

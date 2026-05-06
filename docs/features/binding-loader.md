@@ -182,6 +182,15 @@ Python and TypeScript loaders do not currently enforce these caps. Callers in th
 
 ## Contract: BindingLoadError
 
+### Inputs
+N/A — this is an exception class, not a callable function.
+
+### Errors
+N/A — exception classes are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — exception classes are not called and do not return values.
+
 ### Fields (Python / TypeScript)
 - `file_path` / `filePath`: string | None — path to the `.binding.yaml` file that triggered the error (if applicable)
 - `module_id` / `moduleId`: string | None — module ID of the entry that failed (if applicable)
@@ -217,6 +226,9 @@ Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — 
 
 ### Errors
 - `BindingLoadError` / `BindingLoadError` (Python raises, Rust returns `Err`) — path not found, YAML parse failure, or strict mode violation
+- `BindingLoadError::FileRead` (Rust) — any OS/IO error including EACCES/EPERM causes immediate abort; fail-fast behavior
+- `BindingLoadError` (Python) — OS errors wrapping IOError/OSError raise immediately
+- TypeScript — EACCES/EPERM during recursive directory traversal are warned and skipped (partial load continues); flat directory reads propagate IO errors
 
 ### Returns
 - On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>` — all modules loaded from the file or directory
@@ -226,6 +238,32 @@ Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — 
 - async: false
 - pure: false (reads filesystem)
 - thread_safe: true (no shared state)
+
+---
+
+## TypeScript-only Extensions
+
+### BindingParser (TypeScript only)
+
+The TypeScript implementation splits binding loading into two classes for browser/edge runtime compatibility:
+
+- **`BindingParser`** — runtime-neutral in-memory parser. Accepts raw YAML string content and returns parsed `BindingDocument` objects. Has no filesystem dependency. Available via both the main and browser entry points.
+- **`parseBindingDocument(content: string): BindingDocument`** — standalone function wrapping BindingParser for callers that don't need class instantiation.
+- **`BindingLoader`** — extends BindingParser with Node.js filesystem I/O (`load(path, strict?, recursive?)`). Available via the main entry point only.
+
+### Browser / Edge Runtime Subpath
+
+The package exports a `apcore-toolkit/browser` subpath that includes only:
+- `BindingParser` and `parseBindingDocument` (filesystem-free)
+- All verifiers, formatters, and display utilities that have no Node.js dependencies
+
+Import from the browser subpath in edge runtimes:
+
+```typescript
+import { BindingParser } from 'apcore-toolkit/browser';
+```
+
+Python and Rust do not have an equivalent browser/edge runtime entry point — these are platform-specific concerns only relevant in the TypeScript/JavaScript ecosystem.
 
 ---
 

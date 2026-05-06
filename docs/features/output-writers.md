@@ -146,7 +146,7 @@ Directly registers the scanned modules into an active `apcore.Registry` instance
     writer.write(modules, registry, { dryRun: false });
     ```
 
-## `HTTPProxyRegistryWriter` (Python and Rust)
+## `HTTPProxyRegistryWriter` (Python, TypeScript, and Rust)
 
 Registers scanned modules as HTTP proxy classes that forward requests to a running web API. This enables CLI execution without invoking route handlers directly (which depend on framework DI systems).
 
@@ -166,6 +166,10 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
     pip install apcore-toolkit[http-proxy]
     ```
 
+=== "TypeScript"
+
+    Included in the standard `apcore-toolkit` package. Uses the global `fetch` API (available in Node.js 20+, browsers, Deno, and workers — no additional dependencies required).
+
 === "Rust"
 
     Enable the `http-proxy` Cargo feature (adds a `reqwest` dependency):
@@ -174,8 +178,6 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
     [dependencies]
     apcore-toolkit = { git = "https://github.com/aiperceivable/apcore-toolkit-rust", features = ["http-proxy"] }
     ```
-
-TypeScript does not ship an HTTP proxy writer; use the standard `RegistryWriter` with a client-side HTTP forwarder if that workflow is needed.
 
 ### Usage
 
@@ -191,6 +193,20 @@ TypeScript does not ship an HTTP proxy writer; use the standard `RegistryWriter`
         auth_header_factory=lambda: {"Authorization": "Bearer xxx"},
     )
     writer.write(modules, registry)
+    ```
+
+=== "TypeScript"
+
+    ```typescript
+    import { Registry } from "apcore-js";
+    import { HTTPProxyRegistryWriter } from "apcore-toolkit";
+
+    const registry = new Registry();
+    const writer = new HTTPProxyRegistryWriter({
+        baseUrl: "http://localhost:8000",
+        authHeaderFactory: () => ({ Authorization: "Bearer xxx" }),
+    });
+    writer.write(modules, registry);
     ```
 
 === "Rust"
@@ -212,7 +228,7 @@ TypeScript does not ship an HTTP proxy writer; use the standard `RegistryWriter`
 
 ### Inputs
 - `modules`: list of `ScannedModule`, required
-- `registry`: `apcore.Registry` (Python) / `&mut apcore::Registry` (Rust), required — the live registry to register HTTP proxy modules into
+- `registry`: `apcore.Registry` (Python) / `Registry` (TypeScript, from `apcore-js`) / `&mut apcore::Registry` (Rust), required — the live registry to register HTTP proxy modules into
 
 ### Errors
 - `WriteError(path, cause)` — registry rejection or target validation failure. HTTP requests themselves are issued later (at module call-time), not during `write`; `write` only registers proxy wrappers.
@@ -223,7 +239,7 @@ TypeScript does not ship an HTTP proxy writer; use the standard `RegistryWriter`
 ### Properties
 - async: false
 - pure: false (mutates registry)
-- availability: Python (always — requires `httpx`; install with `apcore-toolkit[http-proxy]`) and Rust (behind the `http-proxy` Cargo feature — adds a `reqwest` dependency). TypeScript does not ship an HTTP proxy writer.
+- availability: Python (always — requires `httpx`; install with `apcore-toolkit[http-proxy]`), TypeScript (included in the standard package; uses global `fetch` — available in Node.js 20+, browsers, Deno, and workers), and Rust (behind the `http-proxy` Cargo feature — adds a `reqwest` dependency).
 
 ---
 
@@ -235,11 +251,11 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 
 | Format | Returns | Language |
 |--------|---------|----------|
-| `"yaml"` | `YAMLWriter` instance | Both |
+| `"yaml"` | `YAMLWriter` instance | Python, TypeScript, Rust |
 | `"python"` | `PythonWriter` instance | Python |
 | `"typescript"` | `TypeScriptWriter` instance | TypeScript |
-| `"registry"` | `RegistryWriter` instance | Both |
-| `"http-proxy"` | `HTTPProxyRegistryWriter` instance | Python, Rust (feature `http-proxy`) |
+| `"registry"` | `RegistryWriter` instance | Python, TypeScript, Rust |
+| `"http-proxy"` | `HTTPProxyRegistryWriter` instance | Python, TypeScript, Rust (feature `http-proxy`) |
 
 === "Python"
 
@@ -260,6 +276,7 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
     const writer = getWriter("yaml");       // YAMLWriter
     const writer = getWriter("typescript"); // TypeScriptWriter
     const writer = getWriter("registry");   // RegistryWriter
+    const writer = getWriter("http-proxy", { baseUrl: "http://localhost:8000" }); // HTTPProxyRegistryWriter
     ```
 
 ## Contract: get_writer
@@ -267,7 +284,7 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 ### Inputs
 - `format`: string, required — output format name. Supported values per SDK:
   - Python: `"yaml"`, `"python"`, `"registry"`, `"http-proxy"` — raises `ValueError` for anything else
-  - TypeScript: `"yaml"`, `"typescript"`, `"registry"` — raises `InvalidFormatError` for anything else; `"http-proxy"` is not available in TypeScript
+  - TypeScript: `"yaml"`, `"typescript"`, `"registry"`, `"http-proxy"` — raises `InvalidFormatError` for anything else
   - Rust: returns `OutputFormat` enum variant (not a writer instance — idiomatic Rust divergence). Supported variants: `Yaml`, `Registry`, and (with the `http-proxy` Cargo feature) `HttpProxy`; accepts the aliases `"http_proxy"`, `"http-proxy"`, and `"httpproxy"`. Returns `None` for unknown formats rather than raising.
 - Additional keyword args (Python only): forwarded to the writer constructor (e.g., `base_url` for `"http-proxy"`)
 
@@ -307,6 +324,15 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 
 ## Contract: WriteResult
 
+### Inputs
+N/A — this is a data class, not a callable function.
+
+### Errors
+N/A — data classes are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data classes are not called and do not return values.
+
 ### Fields
 - `module_id` / `moduleId`: string — the module that was written
 - `path`: string | None / string | null — output file path; `None`/`null` for RegistryWriter (no file written)
@@ -321,6 +347,15 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 
 ## Contract: WriteError
 
+### Inputs
+N/A — this is an exception/error class, not a callable function.
+
+### Errors
+N/A — exception classes are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — exception classes are not called and do not return values.
+
 ### Fields
 - `path`: string — the file path that could not be written (or the registry key that could not be registered)
 - `cause`: Exception / Error / std::io::Error — the underlying OS or framework error
@@ -334,6 +369,8 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 ## Contract: BuiltInVerifiers
 
 All built-in verifiers implement the `Verifier` protocol. Each reads the artifact and checks well-formedness. None raises — failures are returned as `VerifyResult(ok=False, error=...)`.
+
+Each verifier class implements the Verifier interface. See individual Contract blocks below for per-class specs.
 
 | Verifier | Used By | Checks |
 |----------|---------|--------|
@@ -618,7 +655,10 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
 - All three SDKs wrap verifier results into `WriteResult.verification_error` (Python/Rust) / `WriteResult.verificationError` (TypeScript). Verifier exceptions are caught and stored as verification errors rather than being re-raised.
 
 ### Returns
-- On success: list of `WriteResult` — one per module; each has `module_id`, `path`, `ok`, `verified`, `verification_error`
+- Python/TypeScript: `list[WriteResult]` / `WriteResult[]` on success; raises/throws `WriteError` on I/O failure
+- Rust: `Result<Vec<WriteResult>, WriteError>` — callers must handle the Result explicitly
+
+Each `WriteResult` has `module_id`, `path`, `ok`, `verified`, `verification_error`.
 
 ### Properties
 - async: false
@@ -635,6 +675,9 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
 - `dry_run`: bool, optional, default=false — if true, no modules are registered; returns what would be registered
 - `verify`: bool, optional, default=false — if true, runs built-in `RegistryVerifier` after each registration
 - `verifiers`: list of verifier objects, optional — additional custom verifiers
+- **TypeScript-only option:** `options.errorMode: "throw" | "collect"` (default: `"throw"`)
+  - `"throw"` — raises `WriteError` on first failure (default behavior, matches Python/Rust)
+  - `"collect"` — accumulates failures into `WriteResult` objects instead of throwing; useful for batch operations where you want to continue after individual failures
 
 ### Errors
 - `WriteError` — registration failure (e.g., registry rejected the module)
@@ -658,4 +701,4 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
 | Migrating legacy views to decorators | `PythonWriter` / `TypeScriptWriter` |
 | Live, dynamic module exposure | `RegistryWriter` |
 | Fast, zero-config integration | `RegistryWriter` |
-| CLI execution against a running API (Python) | `HTTPProxyRegistryWriter` |
+| CLI execution against a running API (Python, TypeScript, Rust) | `HTTPProxyRegistryWriter` |

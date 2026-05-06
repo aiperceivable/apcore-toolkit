@@ -304,6 +304,15 @@ For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer
 
 ## Contract: ScannedModule
 
+### Inputs
+N/A — this is a data class, not a callable function.
+
+### Errors
+N/A — data classes are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data classes are not called and do not return values.
+
 ### Construction
 - Python: dataclass — `ScannedModule(module_id=..., target=..., ...)` — all fields with defaults can be omitted
 - TypeScript: interface + factory — `createScannedModule({ moduleId, target, ... })` — NEVER use `new ScannedModule()`
@@ -334,24 +343,63 @@ For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer
 
 ---
 
-## Contract: SerializationUtilities
+## Contract: SerializationUtilities.annotations_to_dict
 
-Three helper functions convert apcore objects to plain dictionaries:
+`annotations_to_dict` / `annotationsToDict` — converts a `ModuleAnnotations` instance to a plain dictionary.
 
-### `annotations_to_dict(annotations)` / `annotationsToDict(annotations)`
-- **Inputs**: `ModuleAnnotations` instance, required
-- **Returns**: `dict[str, Any]` / `Record<string, unknown>` with snake_case keys; all 12 annotation fields included (falsy values included, not omitted)
-- **Properties**: pure: true, async: false
+### Inputs
+- `annotations`: `ModuleAnnotations` instance, required
 
-### `module_to_dict(module)` / `moduleToDict(module)`
-- **Inputs**: `ScannedModule` instance, required
-- **Returns**: `dict[str, Any]` / `Record<string, unknown>` with snake_case keys suitable for YAML/JSON serialization; `None`/`null` fields omitted; annotations serialized via `annotations_to_dict`
-- **Properties**: pure: true, async: false
+### Errors
+- None raised
 
-### `modules_to_dicts(modules)` / `modulesToDicts(modules)`
-- **Inputs**: `list[ScannedModule]` / `ScannedModule[]`, required
-- **Returns**: `list[dict]` / `Record<string, unknown>[]` — batch version of `module_to_dict`
-- **Properties**: pure: true, async: false
+### Returns
+- On success: `dict[str, Any]` / `Record<string, unknown>` with snake_case keys; all 12 annotation fields included (falsy values included, not omitted)
+
+### Properties
+- pure: true
+- async: false
+- availability: all three SDKs (`annotations_to_dict` in Python/Rust, `annotationsToDict` in TypeScript)
+
+---
+
+## Contract: SerializationUtilities.module_to_dict
+
+`module_to_dict` / `moduleToDict` — converts a `ScannedModule` instance to a plain dictionary suitable for YAML/JSON serialization.
+
+### Inputs
+- `module`: `ScannedModule` instance, required
+
+### Errors
+- None raised
+
+### Returns
+- On success: `dict[str, Any]` / `Record<string, unknown>` with snake_case keys suitable for YAML/JSON serialization; `None`/`null` fields omitted; annotations serialized via `annotations_to_dict`
+
+### Properties
+- pure: true
+- async: false
+- availability: all three SDKs (`module_to_dict` in Python/Rust, `moduleToDict` in TypeScript)
+
+---
+
+## Contract: SerializationUtilities.modules_to_dicts
+
+`modules_to_dicts` / `modulesToDicts` — batch version of `module_to_dict` for a list of `ScannedModule` instances.
+
+### Inputs
+- `modules`: `list[ScannedModule]` / `ScannedModule[]` / `&[ScannedModule]`, required
+
+### Errors
+- None raised
+
+### Returns
+- On success: `list[dict]` / `Record<string, unknown>[]` — one dict per module; equivalent to calling `module_to_dict` on each element
+
+### Properties
+- pure: true
+- async: false
+- availability: all three SDKs (`modules_to_dicts` in Python/Rust, `modulesToDicts` in TypeScript)
 
 ---
 
