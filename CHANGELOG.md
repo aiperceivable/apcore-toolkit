@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 
-## [0.6.0] - 2026-05-05
+## [0.6.0] - 2026-05-07
 
 Aligned release across Python, TypeScript, and Rust. Adds surface-aware formatters (LLM markdown / SKILL.md / CLI table-row / JSON), declares the canonical HTTP-method → annotations mapping, and bumps the required apcore runtime to 0.20.0.
 
