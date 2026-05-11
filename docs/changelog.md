@@ -4,7 +4,57 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.5.0] - 2026-04-19
+## [0.7.0] - 2026-05-11
+
+Aligned release across Python, TypeScript, and Rust. Adds **byte-equivalent tabular formatters** (`format_csv`, `format_jsonl`) for cross-SDK consistency, with shared conformance corpus and updated formatting spec. Lifts a class of bugs that previously affected every apcore-cli SDK's `--format csv` / `--format jsonl` implementation.
+
+### Added
+
+- **`format_csv(rows, *, bom=False)` and `format_jsonl(rows)`** — byte-equivalent tabular data formatters in `apcore_toolkit.formatting.tabular` (Python) / `src/formatting/tabular.ts` (TypeScript) / `src/formatting/tabular.rs` (Rust). Re-exported at the top-level package / crate root. All three SDKs emit identical bytes for the same input, asserted via the new shared conformance corpus at `conformance/fixtures/format_csv.json` (15 cases) and `format_jsonl.json` (8 cases).
+- **Tabular Formats** section in `docs/features/formatting.md` (~90 lines) — full contract for header derivation (union of keys, insertion-order), cell serialization (canonical compact JSON for nested values, whole-number floats as integers matching JS `JSON.stringify`, NaN/Inf → empty cell / null), RFC 4180 CRLF for CSV / LF for JSONL, BOM option, number portability constraints (`Number.MAX_SAFE_INTEGER`), and the explicit YAML deferral note.
+
+### Changed
+
+- **`apcore-toolkit-rust`** — `serde_json` `preserve_order` feature enabled. Required for canonical insertion-order key emission, matching Python `dict` and JS object key ordering. Transitively affects all `serde_json::Map` instances in the dependency tree; downstream code that relied on alphabetical iteration must re-sort explicitly (the toolkit's `render_annotations_table` already does so to honour the `formatting.md` alphabetical contract).
+
+### Why
+
+Per-SDK reimplementations of csv/jsonl had accumulated divergence over time: apcore-cli-python emitted Python repr `{'k': 'v'}` for nested values (invalid JSON); apcore-cli-typescript derived headers from `Object.keys(rows[0])` only (silent data loss on heterogeneous rows — surfaced via aisee-cli); apcore-cli-rust used `\n` instead of CRLF. The spec MUST language couldn't enforce conformance on downstream consumers (e.g. aisee-cli) that reimplemented their own emission. Lifting csv/jsonl into the toolkit replaces those independent failure modes with a single conformance-tested reference. See `apcore-cli/docs/tech-design.md` ADR-09 for the full tier-split rationale (byte-equivalent toolkit-delegated vs SDK-native presentation vs trivial stdlib).
+
+### Notes
+
+- **YAML is intentionally not in this tier yet.** Each idiomatic YAML library (PyYAML, js-yaml, serde_yaml_ng) emits different forms even for identical input. Byte-equivalence requires a custom emitter, which is deferred. YAML remains SDK-native (Tier 2) and may differ across languages.
+- Integers exceeding `Number.MAX_SAFE_INTEGER` (`2^53 - 1`) are not portable across SDKs; callers should serialize them as JSON strings.
+
+### Downstream impact
+
+Downstream adapters (`apcore-cli`, `apcore-mcp`, `apcore-a2a`, and product CLIs like `aisee-cli`) should delete any local csv/jsonl emission logic and import `format_csv` / `format_jsonl` from the toolkit. The shared conformance corpus enforces that every downstream produces identical output going forward.
+
+
+## [0.6.0] - 2026-05-07
+
+Aligned release across Python, TypeScript, and Rust. Adds surface-aware formatters (LLM markdown / SKILL.md / CLI table-row / JSON), declares the canonical HTTP-method → annotations mapping, and bumps the required apcore runtime to 0.20.0.
+
+### Changed
+
+- **Required runtime bumped to apcore 0.21.0** — `README.md` badge and `docs/getting-started.md` prerequisites updated from `apcore 0.19.0+` to `apcore 0.21.0+`. Toolkit only consumes apcore's stable surface (`ModuleAnnotations`, `Registry`, `ModuleExample`, `parse_docstring`, `Module`, `Context`, `errors`, `jsonSchemaToTypeBox`, `annotationsFromJSON`/`annotationsToJSON`); none of those touched the 0.19 → 0.21 changes (which were focused on `OverridesStore`, `SubscriberFactory`, `StepMiddleware`, schema/system-modules hardening, plus `CircuitOpenError` → `CircuitBreakerOpenError` rename and `TaskStore.put` → `save` rename — all out of toolkit's reach). All three SDKs continue to pass full test suites (Python 585 / TypeScript 490 / Rust 380).
+
+### Added
+
+- **Surface-aware formatters** (#13) — `format_module`, `format_schema`, `format_modules` for rendering `ScannedModule` and JSON Schema for specific consumer surfaces. Four styles: `markdown` (LLM context), `skill` (drop-in `.claude/skills/<id>/SKILL.md` or `.gemini/skills/<id>/SKILL.md` body with minimal `name` + `description` frontmatter — no vendor-specific extensions), `table-row` (CLI listing), `json` (programmatic). Replaces the ad-hoc `to_markdown(asdict(module))` pattern downstream surfaces were using. Spec: `docs/features/formatting.md`.
+- **Annotation-table cross-SDK alignment** (#13 follow-up) — `format_module(style="markdown" | "skill")` now emits the `## Behavior` fact table identically across Python / TypeScript / Rust: only fields that differ from `ModuleAnnotations` defaults are listed, rows are sorted alphabetically by key, and bool values render as lowercase `true` / `false`. The `## Behavior` section is omitted entirely when every annotation field equals its default. This closes the byte-equality gap surfaced by the original cross-SDK verification step.
+
+### Changed
+
+- **`infer_annotations_from_method` canonical mapping** (#11) — spec now declares `HEAD` and `OPTIONS` MUST map to `readonly=true` (without `cacheable=true`), aligning with RFC 9110 §9.2 safe-method semantics. Closes a Python/TypeScript ↔ Rust divergence where Rust already returned `readonly=true` for these methods while Python and TypeScript returned default annotations. Spec: `docs/features/scanning.md`.
+
+### Fixed
+
+- **`HTTPProxyRegistryWriter` doc inconsistency** (#12) — `docs/features/output-writers.md` heading, Contract block, and `get_writer()` factory table now correctly list TypeScript alongside Python and Rust. `apcore-toolkit-typescript` has shipped `HTTPProxyRegistryWriter` since the `http-proxy` writer feature commit; the toolkit docs had not caught up. `docs/features/overview.md` SDK Parity table was already correct. The TypeScript build needs only Node 18+ for the global `fetch`; no extra install is required.
+- **`Contract: get_writer` Inputs alignment** (sync follow-up) — `docs/features/output-writers.md` `Contract: get_writer` Inputs paragraph for TypeScript was still asserting "`http-proxy` is not available in TypeScript" (residue from the original #12 misdirection); corrected to list `"http-proxy"` / `"http_proxy"` and the `options.baseUrl` requirement. Rust paragraph clarified to surface `Err(OutputFormatError::Unknown)` rather than the imprecise "returns `None`".
+- **`HTTPProxyRegistryWriter` constructor unit divergence** (sync follow-up) — added an admonition under the constructor docs noting that Python uses `timeout: float = 60.0` (seconds), Rust uses `timeout_secs: f64` (seconds, validated non-zero finite), and TypeScript uses `timeoutMs: number = 60_000` (milliseconds, default 60 s). Default behavior is identical; cross-language porters MUST translate units when passing an explicit value.
+
+## [0.5.0] - 2026-04-21
 
 Aligned release across Python, TypeScript, and Rust. Tracks apcore 0.19.0 features (expanded `ModuleAnnotations`, `display` field, declarative config spec).
 
@@ -14,7 +64,7 @@ Aligned release across Python, TypeScript, and Rust. Tracks apcore 0.19.0 featur
   - Loose mode (default): only `module_id + target` required.
   - Strict mode: additionally requires `input_schema + output_schema`.
   - `spec_version` validated; missing/unsupported values WARN but do not fail.
-  - Errors: `BindingLoadError` with `file_path`, `module_id`, `missing_fields`, `reason` (Rust: 5-variant `thiserror` enum).
+  - Errors: `BindingLoadError` with `file_path`, `module_id`, `missing_fields`, `reason` (Rust: 7-variant `thiserror` enum — adds `FileTooLarge` (16 MiB per-file cap) and `TooManyFiles` (10,000-files-per-directory cap) safety variants).
 - **`ScannedModule.display`** (three SDKs) — new optional top-level field holding the sparse display overlay for binding YAML persistence. Distinct from `metadata["display"]` (resolved form produced by `DisplayResolver`).
 - **New feature doc**: `docs/features/binding-loader.md`.
 - **`docs/features/display-overlay.md`** — new section explaining the sparse-overlay vs resolved-display distinction, and the round-trip flow.
@@ -53,9 +103,32 @@ A code-forge:review pass on the 0.5.0 delta produced a short list of cross-SDK i
 - **Silent drop of malformed `display` values** — Python, TypeScript, and Rust all used to swallow non-mapping overlays without warning. All three SDKs now emit a WARN with the offending module_id and return `None`/`null`, matching the behaviour of `annotations`/`examples` parsers.
 - **`ScannedModule.display` defensive copy** — Python's `YAMLWriter` used to emit a bare reference (`binding["display"] = module.display`); it now deep-copies, matching TypeScript's `structuredClone` and Rust's `.clone()`.
 - **Python `ScannedModule.display` field position** — moved from the middle of the dataclass to the end, preserving positional construction compatibility with pre-0.5.0 callers.
-- **Python `BindingLoader` polish** — `load()` gained `recursive: bool = False`; `read_text` forces UTF-8; error wording changed from "missing required fields" to "missing or null required fields".
+- **Python `BindingLoader` polish** — `load()` gained `recursive: bool = False`; `read_text` forces UTF-8.
 - **TypeScript `BindingLoader` polish** — `_parseExamples` uses `structuredClone`; `fs.statSync` failures distinguish `ENOENT` from other `errno` codes.
 - **Rust `BindingLoader` polish** — `read_dir` per-entry errors are now surfaced as `BindingLoadError::FileRead` (previously silently discarded); `MissingFields`/`InvalidStructure` `Display` no longer leak `Some(...)` / `None` debug wrappers.
+
+### Hardening (cross-SDK sync — post-audit)
+
+A later cross-SDK sync pass surfaced semantic divergences between the three loaders/writers/scanners. These are fixed in 0.5.0 as well, bringing the shipped SDKs to behavioural parity where the spec now documents it:
+
+- **`BindingLoader` strict-mode wrong-type rejection (Python, TypeScript)** — a required field is now rejected when absent, `null`, or of the wrong type (e.g. `module_id: 42`, `target: true`, empty-string `module_id`). Previously Python/TypeScript silently coerced wrong-type scalars via `str(value)`/`String(value)`, while Rust already rejected them; the same YAML now behaves identically in all three SDKs. The error reason widens from "missing required fields" / "missing or null required fields" to **"missing or invalid required fields"**, matching the Rust loader.
+- **`BindingLoader` defensive deep-copy (Python, TypeScript)** — Python previously did a shallow `dict(raw_input_schema)` / `list(raw_tags)`; TypeScript's `_asRecord` returned a fresh outer `{}` but shared nested refs. Both now deep-clone `input_schema`, `output_schema`, and `metadata` (`copy.deepcopy` in Python, `structuredClone` in TypeScript). Rust's `Value.clone` was already deep. Caller mutation of a loaded `ScannedModule.input_schema.properties.id.type` no longer leaks back into the parsed YAML source graph.
+- **`BaseScanner.deduplicate_ids` collision pre-scan (Python)** — Python's `deduplicate_ids` now pre-computes the set of original `module_id`s and bumps the suffix counter past any collision, matching the TypeScript and Rust algorithms. Input `[a, a, a_2]` now yields `[a, a_3, a_2]` instead of the previous buggy `[a, a_2, a_2]`.
+- **`YAMLWriter` atomic writes (Python)** — Python now writes each binding file to `<name>.<pid>.tmp`, `fsync`s, then `os.replace`s onto the final path, matching the TypeScript (`tmp + renameSync`) and Rust (`tmp + sync_all + rename`) writers. A crash mid-write no longer leaves a partial YAML that `BindingLoader` fails to parse. A pre-write check also refuses to overwrite a symlink at the target path.
+- **`resolve_target.allowed_prefixes` (Python)** — Python's `resolve_target` now accepts an optional `allowed_prefixes: list[str] | None` argument (forwarded from `RegistryWriter.write(..., allowed_prefixes=...)`). When set, imports outside the allowlist raise `PermissionError` *before* `importlib.import_module` runs. Mitigates arbitrary-code-execution via forged binding files (e.g. `target: "os:system"`). Parity with the TypeScript SDK's `allowedPrefixes` option, adapted to Python's module-name import model. Rust does not need this because `resolve_target` is parse-only and the `HandlerFactory` is the security boundary.
+
+### Documentation
+
+- **`flattenParams` removed from TypeScript docs + README** — the Python `flatten_pydantic_params` continues to ship, but TypeScript's advertised `flattenParams(func, zodSchema)` was never actually exported and its wrapper semantics are a no-op in TypeScript (native object-argument idiom already flat). `docs/features/pydantic.md` is now Python-only with an admonition explaining the TypeScript/Rust rationale.
+- **`HTTPProxyRegistryWriter` docs corrected** — spec stripped `dry_run`/`verify`/`verifiers` from the `write` Contract (Python and Rust impls do not accept them); availability widened from "Python only" to "Python (always) and Rust (with `http-proxy` Cargo feature)".
+- **Cross-SDK async contract for `RegistryWriter.write`** — spec now documents `async: false` for Python/Rust and `async: true` for TypeScript (TypeScript must `await resolveTarget` internally).
+- **`run_verifier_chain` / `runVerifierChain`** — added a public Contract block in `docs/features/output-writers.md` (was public in all three SDKs but undocumented).
+- **Binding Loader: Rust safety caps** — new "Safety Caps (Rust only)" section documenting the 16 MiB per-file and 10,000 files-per-directory limits. Rust `BindingLoadError` variant count corrected from 5 to 7 (adds `FileTooLarge`, `TooManyFiles`).
+- **`ScannedModule.Fields`** — removed spurious `spec_version` row (it is a YAML document header stamped by `YAMLWriter`, not a field on the object); added `suggested_alias` (present in all three SDKs but previously undocumented).
+- **`filter_modules` Contract errors** — corrected Python entry: raises `ValueError` (wrapping `re.error` via `from exc`), not `re.error` directly; TypeScript `SyntaxError`, Rust `regex::Error` unchanged.
+- **Tri-language scope** — `docs/scope.md` updated from "dual-language" (Python + TypeScript) to tri-language parity. `docs/getting-started.md` gained a Rust prerequisites + installation tab. `docs/index.md` org URL corrected (`aipartnerup` → `aiperceivable`) and Quick Start link redirected to `getting-started.md`.
+- **Stale TypeScript examples fixed** — `docs/features/openapi.md` (`new ScannedModule` → `createScannedModule`) and `docs/ai-enhancement.md` (`writer.write(modules, { outputDir })` → `writer.write(modules, "./bindings")`). Stale `apcore >= 0.14.0` in `getting-started.md` bumped to `0.19.0+`.
+- **Rust README** — `Scanner` trait references corrected to the actual `BaseScanner<App>` (5 replacements in Core Modules table and two examples).
 
 ## [0.4.0] - 2026-03-23
 

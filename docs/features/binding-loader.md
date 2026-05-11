@@ -201,7 +201,7 @@ N/A — exception classes are not called and do not return values.
 |-----|------|-------|
 | Python | `class BindingLoadError(Exception)` | Single class with all 4 fields as attributes |
 | TypeScript | `class BindingLoadError extends Error` | Same 4 fields as camelCase properties |
-| Rust | `enum BindingLoadError` (`thiserror`) | 7 variants: `PathNotFound`, `FileRead { source }`, `YamlParse { source }`, `MissingFields { module_id, missing_fields }`, `InvalidStructure { reason }`, `FileTooLarge { path, size, max }`, `TooManyFiles { path, max }` |
+| Rust | `enum BindingLoadError` (`thiserror`) | 7 variants: `PathNotFound { path }`, `FileRead { path, source }`, `YamlParse { path, source }`, `MissingFields { path: Option<String>, module_id: Option<String>, missing_fields: Vec<String> }`, `InvalidStructure { path: Option<String>, reason: String }`, `FileTooLarge { path, size, max }`, `TooManyFiles { path, max }` |
 
 Rust callers pattern-match on the variant to recover structured information. Python/TypeScript callers access fields directly.
 

@@ -74,7 +74,7 @@ When flattening, `apcore-toolkit` preserves:
 - `PermissionError` (Python) / `Error` (TypeScript) — `allowed_prefixes` set and `module_path` not permitted
 - `ImportError` / `ModuleNotFoundError` (Python) — the module path cannot be imported
 - `Error` (TypeScript) — dynamic import failed or attribute not found
-- `Err(ResolveError)` (Rust) — parse failure; Rust does NOT perform runtime import
+- `Err(ResolveTargetError)` (Rust) — parse failure (5 variants: `MissingSeparator`, `EmptyModulePath`, `EmptyQualname`, `InvalidQualname`, `InvalidModulePath`); Rust does NOT perform runtime import
 
 ### Returns
 - Python: the callable (actual function/class loaded via `importlib`)

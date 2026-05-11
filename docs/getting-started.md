@@ -7,17 +7,17 @@ This guide walks you through installing **apcore-toolkit** and using its core mo
 === "Python"
 
     - **Python**: 3.11+
-    - **apcore**: 0.20.0+
+    - **apcore**: 0.21.0+
 
 === "TypeScript"
 
-    - **Node.js**: 18+
-    - **apcore**: 0.20.0+
+    - **Node.js**: 20+
+    - **apcore**: 0.21.0+
 
 === "Rust"
 
     - **Rust**: 1.70+ (edition 2021)
-    - **apcore**: 0.20.0+
+    - **apcore**: 0.21.0+
 
 ---
 
@@ -233,15 +233,14 @@ Flatten complex models into scalar keyword arguments, perfect for MCP (Model Con
 === "TypeScript"
 
     ```typescript
-    import { flattenParams, resolveTarget } from "apcore-toolkit";
-    import { z } from "zod";
+    import { resolveTarget } from "apcore-toolkit";
 
     // Resolve a target string to a callable (resolveTarget is async)
     const func = await resolveTarget("myapp/views:createTask") as (input: Record<string, unknown>) => unknown;
 
-    // Define the input schema and wrap the function for flat-arg invocation
-    const schema = z.object({ id: z.number() });
-    const wrapped = flattenParams(func, schema);
+    // TypeScript object-argument idiom is already flat — call directly.
+    // No toolkit wrapper ships in TypeScript; see docs/features/pydantic.md for the rationale.
+    const result = func({ id: 1 });
     ```
 
 ### OpenAPI Extraction

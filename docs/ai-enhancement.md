@@ -67,8 +67,23 @@ The toolkit exports a generic `Enhancer` protocol that any enhancement implement
     }
     ```
 
+=== "Rust"
+
+    ```rust
+    use apcore_toolkit::{Enhancer, ScannedModule};
+
+    // Enhancer is defined as:
+    pub trait Enhancer: Send + Sync {
+        fn enhance(&self, modules: Vec<ScannedModule>) -> Vec<ScannedModule>;
+    }
+    ```
+
+    Rust's trait is synchronous and blocking. If you need to call it from async code, wrap the
+    call with `tokio::task::spawn_blocking(...)` (or your runtime's equivalent) to avoid
+    blocking the executor.
+
 !!! note "Sync vs Async"
-    The Python `Enhancer` protocol is synchronous (`list[ScannedModule]`) while the TypeScript interface is asynchronous (`Promise<ScannedModule[]>`). This is a deliberate language-convention choice: TypeScript enhancement calls (HTTP to SLM endpoints) are inherently async. Python implementations may use either sync or async internally; the protocol defines the sync signature for broader compatibility.
+    Python and Rust expose synchronous `Enhancer` signatures (`list[ScannedModule]` / `Vec<ScannedModule>`); TypeScript exposes an asynchronous one (`Promise<ScannedModule[]>`). This is a deliberate language-convention choice: TypeScript enhancement calls (HTTP to SLM endpoints) are naturally async, while Rust trait objects stay simpler and more portable when sync (call from async via `spawn_blocking`). Python implementations may use either sync or async internally; the protocol defines the sync signature for broader compatibility.
 
 ### Contract
 

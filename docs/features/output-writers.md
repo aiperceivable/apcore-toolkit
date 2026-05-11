@@ -230,6 +230,9 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
 !!! info "Constructor parameter naming"
     Each SDK names the timeout parameter idiomatically for its language: Python `timeout: float = 60.0` (seconds), Rust `timeout_secs: f64` (seconds; constructor returns `Err(InvalidTimeout)` if non-positive or non-finite), TypeScript `timeoutMs: number = 60_000` (milliseconds; default is 60 seconds). Default behavior is identical at 60 s; cross-language porters MUST translate the unit when explicitly passing a value.
 
+!!! info "TypeScript-only constructor option: `fetchImpl`"
+    The TypeScript constructor accepts an optional `fetchImpl?: typeof fetch` to inject a custom fetch implementation (useful for tests, edge runtimes, or proxy-aware HTTP clients). When omitted, the writer uses `globalThis.fetch` (available in Node.js 20+, browsers, Deno, and workers). If neither `options.fetchImpl` nor `globalThis.fetch` is available at construction time, the constructor throws. Python (`httpx`) and Rust (`reqwest`) inject their own HTTP clients and do not surface an equivalent option.
+
 ## Contract: HTTPProxyRegistryWriter.write
 
 ### Inputs
@@ -462,8 +465,13 @@ All built-in verifiers implement the `Verifier` protocol. Each reads the artifac
 - `path`: string, required — filesystem path to the JSON artifact. An empty string is skipped gracefully.
 - `module_id`: string, required.
 
+#### Constructor
+- Python: `JSONVerifier(schema: dict | None = None)` — optional JSON Schema validated via `jsonschema`.
+- TypeScript: `new JSONVerifier(schema?: Record<string, unknown>)` — optional schema validated via `Ajv` (strict: false).
+- Rust: `JSONVerifier::new()` / `JSONVerifier::default()` — **no schema parameter**. The Rust verifier only checks that the artifact parses as valid JSON. Schema validation is Python/TypeScript only; Rust callers who need schema enforcement should chain a custom verifier after `JSONVerifier` in the verifier chain.
+
 #### Errors
-- None raised. Failure modes (file not found, malformed JSON, optional schema validation failure) are returned as `VerifyResult(ok=False, error="...")`.
+- None raised. Failure modes (file not found, malformed JSON, optional schema validation failure in Python/TypeScript only) are returned as `VerifyResult(ok=False, error="...")`.
 
 #### Returns
 - On success: `VerifyResult(ok=True)`.
@@ -640,12 +648,12 @@ results = writer.write(
 `run_verifier_chain` / `runVerifierChain` is the public helper that orchestrates a sequence of verifiers against a single written artifact. Writers call it internally after each `write` step; callers can also invoke it directly to run a verifier chain outside the writer workflow (e.g., for post-build CI checks against already-written `.binding.yaml` files).
 
 ### Inputs
-- `verifiers`: list of `Verifier` / `Verifier[]` / `&[Box<dyn Verifier>]`, required — ordered chain of verifiers to run
+- `verifiers`: list of `Verifier` / `Verifier[]` / `&[&dyn Verifier]`, required — ordered chain of verifiers to run
 - `path`: string, required — passed to each `verifier.verify(path, module_id)`. For Registry-backed artifacts that have no on-disk file, callers pass the empty string `""` (the convention used by `RegistryWriter` itself, see `output/registry_writer`). Built-in file-based verifiers (`YAMLVerifier`, `JSONVerifier`, `MagicBytesVerifier`, `SyntaxVerifier`) skip gracefully when `path` is `""`. All three SDKs share this signature: Python `str`, TypeScript `string`, Rust `&str`.
 - `module_id` / `moduleId`: string, required — module ID passed to each verifier for error context
 
 ### Errors
-- None raised. Verifier exceptions (both declared and unexpected) are caught by the chain and surfaced as `VerifyResult(ok=False, error="Verifier crashed: …")`.
+- None raised. Verifier exceptions (both declared and unexpected) are caught by the chain and surfaced as `VerifyResult(ok=False, error="Verifier crashed: …")`. In Rust the chain wraps each `verify` call in `std::panic::catch_unwind`, so a panicking verifier becomes `VerifyResult { ok: false, error: "Verifier crashed: …" }` rather than unwinding through the writer. Python and TypeScript additionally append a `(verifier: <ClassName>)` suffix to the crash message; Rust omits the suffix because trait objects (`&dyn Verifier`) erase type names.
 
 ### Returns
 - On success: the first failing `VerifyResult` encountered in the chain, OR `VerifyResult(ok=True)` if every verifier passed.
@@ -691,12 +699,13 @@ results = writer.write(
 === "Rust"
 
     ```rust
-    use apcore_toolkit::{run_verifier_chain, YAMLVerifier};
+    use apcore_toolkit::{run_verifier_chain, Verifier, YAMLVerifier};
 
-    let verifiers: Vec<Box<dyn Verifier>> = vec![Box::new(YAMLVerifier)];
+    let yaml = YAMLVerifier;
+    let verifiers: Vec<&dyn Verifier> = vec![&yaml];
     let result = run_verifier_chain(
         &verifiers,
-        Some(Path::new("./bindings/users.create.binding.yaml")),
+        "./bindings/users.create.binding.yaml",
         "users.create",
     );
     if !result.ok {

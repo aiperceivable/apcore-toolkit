@@ -48,7 +48,7 @@ Available in:
     ```bash
     npm install apcore-toolkit
     ```
-    Requires Node.js 18+ and apcore-js 0.21.0+.
+    Requires Node.js 20+ and apcore-js 0.21.0+.
 
 === "🦀 Rust"
 
@@ -109,14 +109,14 @@ Available in:
 === "🦀 Rust"
 
     ```rust
-    use apcore_toolkit::{Scanner, ScannedModule};
+    use apcore_toolkit::{BaseScanner, ScannedModule};
     use async_trait::async_trait;
     use serde_json::json;
 
     struct MyScanner;
 
     #[async_trait]
-    impl Scanner<()> for MyScanner {
+    impl BaseScanner<()> for MyScanner {
         async fn scan(&self, _app: &()) -> Vec<ScannedModule> {
             vec![
                 ScannedModule::new(
@@ -129,7 +129,7 @@ Available in:
                 )
             ]
         }
-        fn source_name(&self) -> &str { "my-framework" }
+        fn get_source_name(&self) -> &str { "my-framework" }
     }
 
     #[tokio::main]
@@ -212,7 +212,7 @@ See [`docs/features/formatting.md`](docs/features/formatting.md) § Tabular Form
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
 | `TypeScriptWriter` | Generates `@module`-decorated TypeScript wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |
-| `HTTPProxyRegistryWriter` | Registers HTTP proxy modules that forward requests to a running API (Python only) |
+| `HTTPProxyRegistryWriter` | Registers HTTP proxy modules that forward requests to a running API (Python, TypeScript, and Rust — TypeScript uses global `fetch` available in Node 20+; Rust ships via the `http-proxy` Cargo feature, enabled by default) |
 | `to_markdown` | Converts arbitrary dicts to Markdown with depth control and table heuristics |
 | `format_csv` _(v0.7.0)_ | Byte-equivalent RFC 4180 CSV emitter. Header = union of keys across all rows; canonical compact JSON for nested cells; CRLF terminator; optional UTF-8 BOM. |
 | `format_jsonl` _(v0.7.0)_ | Byte-equivalent JSON Lines emitter. Canonical compact JSON per row, LF terminator, insertion-order preserved, NaN/Inf → null. |
@@ -222,8 +222,8 @@ See [`docs/features/formatting.md`](docs/features/formatting.md) § Tabular Form
 | `WriteResult` | Dataclass representing the outcome of a writer operation |
 | `WriteError` | Exception raised when a writer fails due to I/O or other errors |
 | `Verifier` / `VerifyResult` | Protocol and result type for pluggable output verification |
-| `DisplayResolver` | Sparse binding.yaml display overlay — resolves surface-facing alias, description, guidance, tags into `metadata["display"]` (§5.13) |
-| `ConventionScanner` | Scans a `commands/` directory of plain Python files for public functions and converts them to `ScannedModule` instances with schema inferred from type annotations (§5.14) |
+| `DisplayResolver` | Sparse binding.yaml display overlay — resolves surface-facing alias, description, guidance, tags into `metadata["display"]` |
+| `ConventionScanner` | Scans a `commands/` directory of plain Python files for public functions and converts them to `ScannedModule` instances with schema inferred from type annotations |
 
 ---
 

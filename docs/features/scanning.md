@@ -427,10 +427,12 @@ N/A — data classes are not called and do not return values.
 
 ## Serialization Utilities
 
-Two helper functions convert apcore objects to plain dictionaries for JSON/YAML serialization:
+Helper functions convert apcore objects to plain dictionaries for JSON/YAML serialization, and produce safe copies of `ScannedModule` instances:
 
 | Function (Python / TypeScript) | Description |
 |-------------------------------|-------------|
 | `annotations_to_dict()` / `annotationsToDict()` | Converts a `ModuleAnnotations` instance to a plain dict with snake_case keys |
 | `module_to_dict()` / `moduleToDict()` | Converts a `ScannedModule` to a dict with snake_case keys, suitable for YAML/JSON output |
 | `modules_to_dicts()` / `modulesToDicts()` | Converts a list of `ScannedModule` to a list of dicts (batch version of `module_to_dict`) |
+| `create_scanned_module()` / `createScannedModule()` | Construct a `ScannedModule` with defaults filled in (Python kwargs / TypeScript options object). Rust uses `ScannedModule::new(...)` instead. |
+| `clone_module()` / `cloneModule()` | Returns a deep-copy of a `ScannedModule` with optional field overrides. Useful before round-trip writes or when applying display overlays without mutating the source. Rust users derive `Clone` on `ScannedModule` and use `.clone()` directly. |

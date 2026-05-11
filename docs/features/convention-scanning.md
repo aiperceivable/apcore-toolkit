@@ -2,7 +2,7 @@
 
 The `ConventionScanner` discovers plain Python functions as apcore modules from a `commands/` directory -- zero decorators, zero imports required. Each public function becomes a `ScannedModule` with schema inferred from type annotations and description extracted from docstrings.
 
-**Cross-reference**: PROTOCOL_SPEC Section 5.14 (Convention-based Module Discovery)
+**Cross-reference**: [apcore PROTOCOL_SPEC — Convention-based Module Discovery](https://github.com/aiperceivable/apcore/blob/main/PROTOCOL_SPEC.md) (Convention-based Module Discovery section)
 
 ## Overview
 
@@ -78,7 +78,7 @@ The **prefix** is determined by:
 
 ## Schema Inference from Type Hints
 
-The scanner builds JSON Schema `input_schema` and `output_schema` from function signatures and type annotations (subset of PROTOCOL_SPEC Section 5.11.5).
+The scanner builds JSON Schema `input_schema` and `output_schema` from function signatures and type annotations (subset of the [apcore PROTOCOL_SPEC](https://github.com/aiperceivable/apcore/blob/main/PROTOCOL_SPEC.md) "Schema Inference" rules).
 
 ### Input Schema
 
