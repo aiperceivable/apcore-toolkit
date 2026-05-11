@@ -312,3 +312,93 @@ When emitted into per-module files (e.g. `.claude/skills/<module_id>/SKILL.md`),
 By converting complex internal states to Markdown tables or sections, you provide an LLM with a highly structured and easy-to-parse context. This improves the agent's ability to reason about the system's current state and available actions.
 
 `format_module(module, style="markdown")` is the single primitive surfaces should reach for when injecting an apcore module description into an LLM prompt. `format_module(module, style="skill")` produces the same body wrapped in the minimal SKILL.md frontmatter accepted by Claude / Gemini agent runtimes — useful when exporting a registry as discoverable agent skills.
+
+---
+
+## Tabular Formats: `format_csv` / `format_jsonl`
+
+Byte-equivalent tabular data emitters for the apcore ecosystem. The toolkit owns these formats — apcore-cli SDKs and other downstream consumers (`apcore-mcp`, `apcore-a2a`, downstream CLIs like `aisee-cli`) MUST delegate to these reference implementations rather than reimplementing.
+
+### Why these live in the toolkit
+
+CSV and JSONL are deterministic text formats whose output is observable byte-for-byte. The 3-SDK governance model (Python / TypeScript / Rust) makes per-SDK reimplementations a known divergence source: each SDK's natural choice of `str()` / `JSON.stringify` / `serde_json::to_string` differs in subtle ways (Python repr vs JSON, JS dropping trailing `.0`, varying `serde_json::Map` key ordering, RFC 4180 escaping correctness). Lifting the algorithm into the toolkit replaces those independent failure modes with a single conformance-tested implementation.
+
+See `apcore-cli/docs/tech-design.md` ADR-07 for the tier definition: csv/jsonl/markdown/skill are **byte-equivalent toolkit-delegated**; table/tui are **SDK-native presentation**.
+
+### Contract: `format_csv`
+
+#### Inputs
+
+- `rows`: iterable of `Mapping[str, Any]` / `Iterable<Record<string, unknown>>` / `&[Map<String, Value>]`
+- `bom`: optional boolean (default `false`) — prepend UTF-8 BOM (`U+FEFF`) for Excel-locale users
+
+#### Behavior
+
+- **Header derivation**: union of keys across **all** rows, preserved in insertion-order from first occurrence. Rows missing a key emit an empty cell. (This explicitly fixes the prior single-row-keys data-loss bug present in every per-SDK reimplementation.)
+- **Cell value serialization**:
+    - `null` / `None` / `undefined` → empty cell
+    - `bool` → `"true"` / `"false"`
+    - `string` → raw
+    - `int` → `str(value)`
+    - `float` → canonical form: whole-number floats render as integers (e.g. `1.0 → "1"`) matching JS/Rust default `String(n)` behavior; fractional floats use shortest round-trip representation
+    - `NaN` / `±Infinity` → empty cell
+    - `object` / `array` → canonical compact JSON (see `format_jsonl` cell encoding below) embedded in the cell
+- **RFC 4180 escaping**: cells containing `,`, `"`, `\n`, or `\r` are wrapped in `"..."`; embedded `"` is doubled to `""`.
+- **Line terminator**: `\r\n` (CRLF) per RFC 4180.
+- **Empty input**: returns the empty string `""`.
+
+#### Returns
+
+- string
+
+#### Errors
+
+- None — pure function over JSON-shaped input.
+
+#### Properties
+
+- async: false
+- pure: true
+- thread_safe: true
+
+### Contract: `format_jsonl`
+
+#### Inputs
+
+- `rows`: iterable of `Mapping[str, Any]` / `Iterable<Record<string, unknown>>` / `&[Map<String, Value>]`
+
+#### Behavior
+
+- Each row is serialized as canonical compact JSON: no whitespace between tokens, `ensure_ascii=False` (unicode preserved), insertion-order preserved.
+- Numbers: whole-number floats render without the trailing `.0` (matching JS `JSON.stringify`); `NaN` / `±Infinity` are emitted as `null` (matching JS `JSON.stringify`).
+- Object key ordering: insertion order (Python dict order; TS object key order per ES2015+; Rust `serde_json::Map` with `preserve_order` feature).
+- Lines are terminated by `\n` (LF — JSONL convention, NOT CRLF).
+- No trailing blank line.
+- Empty input returns the empty string `""`.
+
+#### Returns
+
+- string
+
+#### Errors
+
+- None.
+
+#### Properties
+
+- async: false
+- pure: true
+- thread_safe: true
+
+### Conformance corpus
+
+A shared corpus at `apcore-toolkit/conformance/fixtures/format_csv.json` and `format_jsonl.json` documents the expected output for ~25 test cases covering: heterogeneous keys, nested objects, RFC 4180 escaping (comma / quote / newline), scalar type coercion (bool / int / float / null), unicode, BOM, JS Number safe-range integers. Each SDK runs the corpus as part of its test suite and asserts byte-identical output. Adding a new edge case to either fixture automatically expands coverage across all 3 SDKs without per-language test edits.
+
+### Number portability note
+
+Integers exceeding `Number.MAX_SAFE_INTEGER` (`2^53 - 1 = 9007199254740991`) are not portable across SDKs: JavaScript `Number` loses precision above this threshold while Python and Rust have arbitrary-precision (Python `int`) or 64-bit signed (Rust `i64`) integer support. Callers passing large numeric identifiers should serialize them as strings to ensure cross-SDK fidelity.
+
+### YAML is intentionally not in this tier
+
+`format_yaml` is **not** part of this toolkit-delegated tier as of v0.7. Byte-equivalent YAML across SDKs requires a custom emitter (each idiomatic YAML library — PyYAML, js-yaml, serde_yaml_ng — uses different quoting / indent / null heuristics and is non-trivial to align). Until that custom emitter is designed, YAML output remains SDK-native and may differ across languages — accepted as a `table`-tier divergence under ADR-07. Tracked as a follow-up.
+

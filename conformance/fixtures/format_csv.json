@@ -1,0 +1,98 @@
+{
+  "$schema": "https://apcore.dev/schemas/conformance-fixture.json",
+  "title": "Tabular Format — format_csv()",
+  "description": "Byte-equivalent CSV output across Python / TypeScript / Rust SDKs. The Python reference (apcore_toolkit.formatting.tabular.format_csv) generates expected output. TypeScript and Rust implementations MUST produce byte-identical output for each input.",
+  "version": "1.0.0",
+  "test_cases": [
+    {
+      "id": "format_csv_001_empty",
+      "description": "Empty input returns empty string",
+      "input": {"rows": [], "bom": false},
+      "expected": ""
+    },
+    {
+      "id": "format_csv_002_single_row",
+      "description": "Single homogeneous row",
+      "input": {"rows": [{"a": 1, "b": 2}], "bom": false},
+      "expected": "a,b\r\n1,2\r\n"
+    },
+    {
+      "id": "format_csv_003_homogeneous_multi_row",
+      "description": "Multiple homogeneous rows",
+      "input": {"rows": [{"a": 1, "b": 2}, {"a": 3, "b": 4}], "bom": false},
+      "expected": "a,b\r\n1,2\r\n3,4\r\n"
+    },
+    {
+      "id": "format_csv_004_heterogeneous_keys",
+      "description": "Regression: later-row extra key must be included (apcore-cli-typescript output.ts:347-354 bug)",
+      "input": {"rows": [{"a": 1}, {"a": 2, "b": 3}], "bom": false},
+      "expected": "a,b\r\n1,\r\n2,3\r\n"
+    },
+    {
+      "id": "format_csv_005_first_row_extra_key",
+      "description": "First-row extra key results in empty cells for later rows",
+      "input": {"rows": [{"a": 1, "b": 2}, {"a": 3}], "bom": false},
+      "expected": "a,b\r\n1,2\r\n3,\r\n"
+    },
+    {
+      "id": "format_csv_006_disjoint_keys",
+      "description": "Fully disjoint keys across rows",
+      "input": {"rows": [{"a": 1}, {"b": 2}, {"c": 3}], "bom": false},
+      "expected": "a,b,c\r\n1,,\r\n,2,\r\n,,3\r\n"
+    },
+    {
+      "id": "format_csv_007_nested_object_as_json",
+      "description": "Regression: nested objects serialize as canonical JSON, not Python repr (apcore-cli-python output.py:149 bug)",
+      "input": {"rows": [{"schema": {"type": "object", "properties": {"a": {"type": "integer"}}}}], "bom": false},
+      "expected": "schema\r\n\"{\"\"type\"\":\"\"object\"\",\"\"properties\"\":{\"\"a\"\":{\"\"type\"\":\"\"integer\"\"}}}\"\r\n"
+    },
+    {
+      "id": "format_csv_008_nested_array",
+      "description": "Arrays serialize as canonical JSON",
+      "input": {"rows": [{"tags": ["math", "arith"]}], "bom": false},
+      "expected": "tags\r\n\"[\"\"math\"\",\"\"arith\"\"]\"\r\n"
+    },
+    {
+      "id": "format_csv_009_rfc4180_comma",
+      "description": "Cells containing comma are quote-wrapped",
+      "input": {"rows": [{"a": "x,y"}], "bom": false},
+      "expected": "a\r\n\"x,y\"\r\n"
+    },
+    {
+      "id": "format_csv_010_rfc4180_quote",
+      "description": "Embedded quotes are doubled",
+      "input": {"rows": [{"a": "she said \"hi\""}], "bom": false},
+      "expected": "a\r\n\"she said \"\"hi\"\"\"\r\n"
+    },
+    {
+      "id": "format_csv_011_rfc4180_newline",
+      "description": "Cells containing newline are quote-wrapped, newline preserved",
+      "input": {"rows": [{"a": "line1\nline2"}], "bom": false},
+      "expected": "a\r\n\"line1\nline2\"\r\n"
+    },
+    {
+      "id": "format_csv_012_scalar_types",
+      "description": "None→empty, bool→lowercase, int, float-whole→int, float-fractional",
+      "input": {"rows": [{"n": null, "b": true, "f": false, "i": 42, "fw": 1.0, "ff": 1.5}], "bom": false},
+      "expected": "n,b,f,i,fw,ff\r\n,true,false,42,1,1.5\r\n"
+    },
+    {
+      "id": "format_csv_013_unicode_not_escaped",
+      "description": "Unicode in nested JSON is preserved (ensure_ascii=False)",
+      "input": {"rows": [{"label": {"zh": "中文"}}], "bom": false},
+      "expected": "label\r\n\"{\"\"zh\"\":\"\"中文\"\"}\"\r\n"
+    },
+    {
+      "id": "format_csv_014_bom_enabled",
+      "description": "BOM option prepends UTF-8 BOM",
+      "input": {"rows": [{"a": 1}], "bom": true},
+      "expected": "﻿a\r\n1\r\n"
+    },
+    {
+      "id": "format_csv_015_negative_and_safe_large_int",
+      "description": "Negative ints and large ints within JS Number.MAX_SAFE_INTEGER (2^53-1). Integers above MAX_SAFE_INTEGER are not portable across SDKs — caller must serialize via JSON string field.",
+      "input": {"rows": [{"neg": -42, "big": 9007199254740991}], "bom": false},
+      "expected": "neg,big\r\n-42,9007199254740991\r\n"
+    }
+  ]
+}

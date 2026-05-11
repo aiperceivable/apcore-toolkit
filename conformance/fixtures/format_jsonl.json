@@ -1,0 +1,56 @@
+{
+  "$schema": "https://apcore.dev/schemas/conformance-fixture.json",
+  "title": "Tabular Format — format_jsonl()",
+  "description": "Byte-equivalent JSONL output across Python / TypeScript / Rust SDKs. The Python reference (apcore_toolkit.formatting.tabular.format_jsonl) generates expected output. TypeScript and Rust implementations MUST produce byte-identical output for each input.",
+  "version": "1.0.0",
+  "test_cases": [
+    {
+      "id": "format_jsonl_001_empty",
+      "description": "Empty input returns empty string",
+      "input": {"rows": []},
+      "expected": ""
+    },
+    {
+      "id": "format_jsonl_002_single_row",
+      "description": "Single row, LF terminator, no trailing blank",
+      "input": {"rows": [{"a": 1, "b": 2}]},
+      "expected": "{\"a\":1,\"b\":2}\n"
+    },
+    {
+      "id": "format_jsonl_003_multi_row",
+      "description": "Multiple rows separated by LF",
+      "input": {"rows": [{"a": 1}, {"b": 2}, {"c": 3}]},
+      "expected": "{\"a\":1}\n{\"b\":2}\n{\"c\":3}\n"
+    },
+    {
+      "id": "format_jsonl_004_compact_no_spaces",
+      "description": "Canonical JSON: no whitespace between separators",
+      "input": {"rows": [{"a": 1, "b": 2}]},
+      "expected": "{\"a\":1,\"b\":2}\n"
+    },
+    {
+      "id": "format_jsonl_005_insertion_order",
+      "description": "Object keys preserved in insertion order, not sorted",
+      "input": {"rows": [{"z": 1, "a": 2, "m": 3}]},
+      "expected": "{\"z\":1,\"a\":2,\"m\":3}\n"
+    },
+    {
+      "id": "format_jsonl_006_nested_value",
+      "description": "Nested objects/arrays serialized inline",
+      "input": {"rows": [{"schema": {"type": "object", "properties": {"a": {"type": "integer"}}}}]},
+      "expected": "{\"schema\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"}}}}\n"
+    },
+    {
+      "id": "format_jsonl_007_unicode_not_escaped",
+      "description": "Unicode preserved (ensure_ascii=False)",
+      "input": {"rows": [{"label": "中文"}]},
+      "expected": "{\"label\":\"中文\"}\n"
+    },
+    {
+      "id": "format_jsonl_008_null_bool_numbers",
+      "description": "Canonical JSON scalars: whole-number floats drop trailing .0 to match JS JSON.stringify; NaN/Infinity (not testable via JSON input) collapse to null",
+      "input": {"rows": [{"n": null, "t": true, "f": false, "i": 42, "fw": 1.0, "ff": 1.5}]},
+      "expected": "{\"n\":null,\"t\":true,\"f\":false,\"i\":42,\"fw\":1,\"ff\":1.5}\n"
+    }
+  ]
+}

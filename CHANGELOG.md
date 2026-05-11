@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-05-11
+
+Aligned release across Python, TypeScript, and Rust. Adds **byte-equivalent tabular formatters** (`format_csv`, `format_jsonl`) for cross-SDK consistency, with shared conformance corpus and updated formatting spec. Lifts a class of bugs that previously affected every apcore-cli SDK's `--format csv` / `--format jsonl` implementation.
+
+### Added
+
+- **`format_csv(rows, *, bom=False)` and `format_jsonl(rows)`** — byte-equivalent tabular data formatters in `apcore_toolkit.formatting.tabular` (Python) / `src/formatting/tabular.ts` (TypeScript) / `src/formatting/tabular.rs` (Rust). Re-exported at the top-level package / crate root. All three SDKs emit identical bytes for the same input, asserted via the new shared conformance corpus at `conformance/fixtures/format_csv.json` (15 cases) and `format_jsonl.json` (8 cases).
+- **Tabular Formats** section in `docs/features/formatting.md` (~90 lines) — full contract for header derivation (union of keys, insertion-order), cell serialization (canonical compact JSON for nested values, whole-number floats as integers matching JS `JSON.stringify`, NaN/Inf → empty cell / null), RFC 4180 CRLF for CSV / LF for JSONL, BOM option, number portability constraints (`Number.MAX_SAFE_INTEGER`), and the explicit YAML deferral note.
+
+### Changed
+
+- **`apcore-toolkit-rust`** — `serde_json` `preserve_order` feature enabled. Required for canonical insertion-order key emission, matching Python `dict` and JS object key ordering. Transitively affects all `serde_json::Map` instances in the dependency tree; downstream code that relied on alphabetical iteration must re-sort explicitly (the toolkit's `render_annotations_table` already does so to honour the `formatting.md` alphabetical contract).
+
+### Why
+
+Per-SDK reimplementations of csv/jsonl had accumulated divergence over time: apcore-cli-python emitted Python repr `{'k': 'v'}` for nested values (invalid JSON); apcore-cli-typescript derived headers from `Object.keys(rows[0])` only (silent data loss on heterogeneous rows — surfaced via aisee-cli); apcore-cli-rust used `\n` instead of CRLF. The spec MUST language couldn't enforce conformance on downstream consumers (e.g. aisee-cli) that reimplemented their own emission. Lifting csv/jsonl into the toolkit replaces those independent failure modes with a single conformance-tested reference. See `apcore-cli/docs/tech-design.md` ADR-09 for the full tier-split rationale (byte-equivalent toolkit-delegated vs SDK-native presentation vs trivial stdlib).
+
+### Notes
+
+- **YAML is intentionally not in this tier yet.** Each idiomatic YAML library (PyYAML, js-yaml, serde_yaml_ng) emits different forms even for identical input. Byte-equivalence requires a custom emitter, which is deferred. YAML remains SDK-native (Tier 2) and may differ across languages.
+- Integers exceeding `Number.MAX_SAFE_INTEGER` (`2^53 - 1`) are not portable across SDKs; callers should serialize them as JSON strings.
+
+### Downstream impact
+
+Downstream adapters (`apcore-cli`, `apcore-mcp`, `apcore-a2a`, and product CLIs like `aisee-cli`) should delete any local csv/jsonl emission logic and import `format_csv` / `format_jsonl` from the toolkit. The shared conformance corpus enforces that every downstream produces identical output going forward.
+
 
 ## [0.6.0] - 2026-05-07
 
