@@ -39,6 +39,7 @@ nav:
       - Display Overlay: features/display-overlay.md
       - Convention Scanning: features/convention-scanning.md
       - Formatting: features/formatting.md
+      - TUI View Model (proposed): features/tui-view-model.md
   - AI Enhancement: ai-enhancement.md
   - Changelog: changelog.md
 

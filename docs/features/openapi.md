@@ -140,6 +140,9 @@ Both `extract_input_schema` and `extract_output_schema` call `deep_resolve_refs`
 - async: false
 - pure: true
 
+### Language-specific hardening
+- **TypeScript only:** `resolve_ref` blocks pointer segments matching `__proto__`, `constructor`, or `prototype` and returns `{}` immediately for any reference whose path traverses one of these names. This is a JS-runtime-specific guard against prototype-pollution attempts on plain object lookups; Python (`dict.get`) and Rust (`serde_json::Map::get`) are not vulnerable to the same attack and walk those segments like any other key. A user spec that legitimately names a schema `__proto__` will resolve in Python and Rust but return `{}` in TypeScript.
+
 ---
 
 ## Contract: resolve_schema

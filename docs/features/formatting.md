@@ -266,7 +266,8 @@ This three-rule alignment (default-comparison + alphabetical + lowercase bool) i
 | `json` | dict / `Record` / `Value` | Equivalent to `module_to_dict(module)` — see [scanning.md](scanning.md#contract-serializationutilities) |
 
 ### Errors
-- `ValueError` (Python) / `Error` (TypeScript) / `Err(FormatError)` (Rust) — when `style` is not one of the four canonical values
+- `ValueError` (Python) / `Error` (TypeScript) — when `style` is not one of the four canonical values
+- Rust: the unknown-`style` branch is unrepresentable. Rust uses the typed enum `ModuleStyle`, so any invalid value is rejected at compile time. `Err(FormatError)` therefore covers only runtime schema-shape failures (e.g., `FormatError::SchemaNotObject`), not unknown `style` values.
 
 ### Returns
 - string for `markdown`, `skill`, `table-row`
@@ -292,7 +293,7 @@ This three-rule alignment (default-comparison + alphabetical + lowercase bool) i
 - For `style="json"`: list / array / Vec of dict / `Record` / `Value` (group_by is ignored).
 
 ### Errors
-- Same as `format_module` for invalid `style`; invalid `group_by` raises `ValueError` / `Error` / `Err(FormatError)`
+- Same as `format_module` for invalid `style` (Python/TypeScript only — Rust rejects at compile time via the typed `ModuleStyle` enum). Invalid `group_by` raises `ValueError` (Python) / `Error` (TypeScript); Rust uses the typed `GroupBy` enum so invalid values are likewise unrepresentable.
 
 ### Properties
 - async: false

@@ -291,15 +291,18 @@ The `get_writer(format)` factory function returns the appropriate writer instanc
 ## Contract: get_writer
 
 ### Inputs
-- `format`: string, required — output format name. Supported values per SDK:
+- `format`: string, required — output format name. Canonical formats are matched **case-sensitively** in all three SDKs.
   - Python: `"yaml"`, `"python"`, `"registry"`, `"http-proxy"` — raises `ValueError` for anything else
   - TypeScript: `"yaml"`, `"typescript"`, `"registry"`, `"http-proxy"` — raises `InvalidFormatError` for anything else
-  - Rust: returns `Result<OutputFormat, OutputFormatError>` (not a writer instance — idiomatic Rust divergence). Supported variants: `Yaml`, `Registry`, and (with the `http-proxy` Cargo feature) `HttpProxy`; accepts the aliases `"http_proxy"`, `"http-proxy"`, and `"httpproxy"`. Unknown formats yield `Err(OutputFormatError::Unknown(format))`, mirroring Python's typed `InvalidFormatError` and TypeScript's `InvalidFormatError`.
+  - Rust: returns `Result<OutputFormat, InvalidFormatError>` (not a writer instance — idiomatic Rust divergence). Supported variants: `Yaml`, `Registry`, and (with the `http-proxy` Cargo feature) `HttpProxy`. Unknown formats yield `Err(InvalidFormatError::Unknown(format))`.
+- **HTTP-proxy aliases (cross-SDK guarantee).** All three SDKs accept the aliases `"http-proxy"` (canonical), `"http_proxy"`, and `"httpproxy"` for the HTTP-proxy variant. Rust additionally matches the http-proxy alias set case-insensitively (e.g., `"HTTP_PROXY"`); Python and TypeScript match these aliases case-sensitively only.
 - Additional keyword args (Python only): forwarded to the writer constructor (e.g., `base_url` for `"http-proxy"`)
 
 ### Errors
 - `ValueError` (Python) / `InvalidFormatError` (TypeScript) — unknown format string
 - `ImportError` (Python, `"http-proxy"` only) — `httpx` not installed
+- **Python only**: `TypeError` raised by `get_writer(...)` when extra keyword arguments are passed to a format that does not accept them (`"yaml"`, `"python"`, `"registry"`). TypeScript and Rust factories take typed options and cannot receive extra kwargs at the API surface.
+- **TypeScript only**: `TypeError` raised by `getWriter("http-proxy", options)` when `options.baseUrl` is missing. Python catches the equivalent missing-argument case in the `HTTPProxyRegistryWriter` constructor; Rust's `HttpProxy` variant carries no inline configuration and the missing-config case surfaces at writer-construction sites elsewhere.
 
 ### Returns
 - On success: writer instance (`YAMLWriter`, `PythonWriter`, `TypeScriptWriter`, `RegistryWriter`, `HTTPProxyRegistryWriter`)

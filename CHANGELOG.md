@@ -2,9 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.7.0] - 2026-05-11
+## [0.7.0] - 2026-05-12
 
-Aligned release across Python, TypeScript, and Rust. Adds **byte-equivalent tabular formatters** (`format_csv`, `format_jsonl`) for cross-SDK consistency, with shared conformance corpus and updated formatting spec. Lifts a class of bugs that previously affected every apcore-cli SDK's `--format csv` / `--format jsonl` implementation.
+Aligned release across Python, TypeScript, and Rust. Adds **byte-equivalent tabular formatters** (`format_csv`, `format_jsonl`) for cross-SDK consistency, with shared conformance corpus and updated formatting spec. Lifts a class of bugs that previously affected every apcore-cli SDK's `--format csv` / `--format jsonl` implementation. Includes the post-audit cross-SDK contract reconciliation pass (D10 contract-parity findings).
 
 ### Added
 
@@ -27,6 +27,16 @@ Per-SDK reimplementations of csv/jsonl had accumulated divergence over time: apc
 ### Downstream impact
 
 Downstream adapters (`apcore-cli`, `apcore-mcp`, `apcore-a2a`, and product CLIs like `aisee-cli`) should delete any local csv/jsonl emission logic and import `format_csv` / `format_jsonl` from the toolkit. The shared conformance corpus enforces that every downstream produces identical output going forward.
+
+### Spec — cross-SDK contract reconciliation (post-audit)
+
+The 2026-05-12 cross-SDK audit (`/apcore-skills:audit --scope toolkit`) flagged six D10 contract-parity divergences between spec text and the three implementations. Spec is the authority for cross-SDK behaviour, so the following spec sections were updated to either narrow the contract to match uniform implementation behaviour, or document an intentional language-specific divergence:
+
+- **`docs/features/binding-loader.md` § Loose-mode wrong-type policy** (D10-001) — added a new subsection declaring the cross-SDK policy for non-required wrong-type optional fields (`input_schema`, `output_schema`, `tags`): strict mode raises `BindingLoadError`; loose mode warns and coerces to the empty default. All three SDKs follow this policy after the Python implementation was adjusted (see `apcore-toolkit-python` 0.7.0 entry).
+- **`docs/features/output-writers.md` § Contract: get_writer** (D10-002, D10-003) — clarified that canonical formats (`"yaml"`, `"python"`/`"typescript"`, `"registry"`) are matched **case-sensitively** in all three SDKs. The HTTP-proxy aliases (`"http-proxy"`, `"http_proxy"`, `"httpproxy"`) are now declared as a **cross-SDK guarantee** — accepted by Python, TypeScript, and Rust. Rust additionally matches the alias set case-insensitively.
+- **`docs/features/openapi.md` § Contract: resolve_ref** (D10-004) — added a "Language-specific hardening" note documenting the TypeScript-only `__proto__` / `constructor` / `prototype` JSON-pointer-segment guard (`PROTO_DENY_LIST` in `binding-parser.ts`). Python and Rust are not vulnerable to the same prototype-pollution attack and walk those segments like any other key.
+- **`docs/features/formatting.md` § Contract: format_module / format_modules** (D10-005) — clarified that Rust's typed `ModuleStyle` / `SchemaStyle` / `GroupBy` enums make the unknown-style branch compile-time-impossible. `Err(FormatError)` covers only runtime schema-shape failures (e.g. `FormatError::SchemaNotObject`), not unknown style values.
+- **`docs/features/display-overlay.md` § Contract: DisplayResolver.resolve** (D10-006) — narrowed the `### Errors` block from "invalid binding format or conflicting resolution options" to "MCP alias validation only", matching the uniform implementation behaviour across all three SDKs (warn-and-continue on invalid binding-data shape; raise only on alias collisions or shadowing).
 
 
 ## [0.6.0] - 2026-05-07

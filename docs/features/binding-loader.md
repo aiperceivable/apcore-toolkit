@@ -39,6 +39,19 @@ Both return `list[ScannedModule]` (or `ScannedModule[]` / `Vec<ScannedModule>`).
 
 Missing optional fields fall back to `ScannedModule` dataclass defaults (empty schemas, empty tags, `version="1.0.0"`, `display=None`, etc.).
 
+#### Loose-mode wrong-type policy
+
+When a non-required field (`input_schema`, `output_schema`, `tags`) is present but holds the wrong type — e.g., `input_schema: 42` or `tags: "single-string"` — the policy is mode-dependent:
+
+| Mode | Behaviour |
+|------|-----------|
+| **strict** (`strict=True`) | Raise `BindingLoadError` (Python) / `Err(BindingLoadError)` (Rust) / `throw BindingLoadError` (TypeScript). |
+| **loose** (`strict=False`, default) | Log a warning naming the offending field and entry, then coerce the field to its empty default (`{}` for schemas, `[]` for tags). Cross-SDK guarantee — Python, Rust, and TypeScript all warn-and-coerce in loose mode. |
+
+The loose-mode behaviour is intentional: callers running with `strict=False` have explicitly opted into permissive parsing, and a single wrong-type optional field should not abort scanning of an otherwise valid binding file.
+
+Required fields (`module_id`, `target`) are always validated and reject wrong-type or empty-string values regardless of mode.
+
 ## Field Mapping
 
 | YAML key | `ScannedModule` field | Strict required | Loose default |
@@ -224,9 +237,25 @@ Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — 
 
 ### Errors
 - `BindingLoadError` / `BindingLoadError` (Python raises, Rust returns `Err`) — path not found, YAML parse failure, or strict mode violation
-- `BindingLoadError::FileRead` (Rust) — any OS/IO error including EACCES/EPERM causes immediate abort; fail-fast behavior
-- `BindingLoadError` (Python) — OS errors wrapping IOError/OSError raise immediately
-- TypeScript — EACCES/EPERM during recursive directory traversal are warned and skipped (partial load continues); flat directory reads propagate IO errors
+- `BindingLoadError::FileRead` (Rust) — any OS/IO error on the *root* path; per-entry errors during recursive traversal are governed by the policy below
+- `BindingLoadError` (Python) — OS errors on the root path wrapping `IOError`/`OSError` raise immediately
+
+### Recursive scan error handling
+
+When `recursive=true` and the scan encounters a per-entry I/O error
+(e.g., `EACCES` / `EPERM` on a subdirectory or unreadable file), the canonical
+behavior is **best-effort**: emit a warning, skip the unreadable entry, and
+continue traversing.
+
+| SDK        | Current behavior                                                                                 | Aligned? |
+|------------|--------------------------------------------------------------------------------------------------|----------|
+| TypeScript | Best-effort: warn + skip + continue                                                              | ✓        |
+| Python     | Best-effort by default — `Path.glob` skips inaccessible subdirectories on most platforms         | partial — platform-dependent |
+| Rust       | Currently fail-fast (`BindingLoadError::FileRead`) — pending alignment with best-effort policy   | ✗ pending |
+
+`BindingLoadError` is still raised when the *root* path is inaccessible or
+missing — the best-effort policy only applies to per-entry errors encountered
+during recursive traversal.
 
 ### Returns
 - On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>` — all modules loaded from the file or directory

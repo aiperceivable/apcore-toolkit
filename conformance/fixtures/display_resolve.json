@@ -29,7 +29,7 @@
             "description": "Get product by ID"
           },
           "mcp": {
-            "alias": "product.get_product.get",
+            "alias": "product_get_product_get",
             "description": "Get product by ID"
           },
           "a2a": {
@@ -155,7 +155,7 @@
             "description": "Retrieve user profile by ID"
           },
           "mcp": {
-            "alias": "user.get_profile.get",
+            "alias": "user_get_profile_get",
             "description": "Retrieve user profile by ID"
           },
           "a2a": {
@@ -287,7 +287,7 @@
             "description": "Binding-level description"
           },
           "mcp": {
-            "alias": "email.send.post",
+            "alias": "email_send_post",
             "description": "Binding-level description"
           },
           "a2a": {

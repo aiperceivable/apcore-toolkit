@@ -269,7 +269,8 @@ To feed `DisplayResolver` from `ScannedModule.display`, pass it explicitly via `
 - `binding_data`: dict/object, optional — in-memory binding data (alternative to `binding_path`)
 
 ### Errors
-- `ValueError` (Python) / `Error` (TypeScript) / `Err(DisplayResolverError)` (Rust) — invalid binding format or conflicting resolution options
+- `ValueError` (Python) / `Error` (TypeScript) / `Err(DisplayResolverError)` (Rust) — raised **only** when MCP alias validation fails (e.g., aliases collide, alias does not match a module, or an alias would shadow another module's `module_id`).
+- Invalid binding-data shape (e.g., `binding_data` is not a dict, `bindings` is not a list, or `binding_path` points to malformed YAML) is **not** raised. All three SDKs log a warning and continue with an empty binding map; the returned modules then have `display=None`. Callers that want fail-fast on shape errors should validate `binding_data` themselves before calling `resolve`.
 
 ### Returns
 - On success: list of `ScannedModule` with `.display` fields populated where overlay data was found; modules without matching overlay data have `display=None`
