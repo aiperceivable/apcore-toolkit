@@ -199,6 +199,29 @@ See [`docs/features/formatting.md`](docs/features/formatting.md) § Tabular Form
 
 > **YAML byte-equivalence is deferred.** Each idiomatic YAML library (PyYAML, js-yaml, serde_yaml_ng) emits different forms even for identical input; a custom canonical emitter is a planned follow-up. YAML output today is SDK-native and may differ across languages.
 
+### Format ownership across the ecosystem
+
+| Format | Lives in | Owner reasoning |
+|---|---|---|
+| `json` | each consumer (`apcore-cli`, `apcore-mcp`, …) | Single-language stdlib (`JSON.stringify` / `json.dumps`); no cross-SDK byte-equivalence requirement |
+| `table` | each consumer | Terminal-rendering library specific (`rich`, `cli-table3`, `comfy-table`) — presentation is the whole point |
+| `yaml` | each consumer + their YAML lib | See deferred note above — not yet byte-equivalent |
+| `csv` | **apcore-toolkit** (`format_csv`) | RFC 4180 + canonical compact JSON for nested cells + CRLF terminator — divergence between SDKs was a real bug pre-v0.7.0 |
+| `jsonl` | **apcore-toolkit** (`format_jsonl`) | Canonical compact JSON per row + LF terminator + NaN/Inf → null — same byte-equivalence requirement |
+| `markdown` | **apcore-toolkit** (`format_module(s)`) | Surface-aware LLM-ready prose; annotation summary + example dropping + prompt-injection guards are part of the cross-SDK contract |
+| `skill` | **apcore-toolkit** (`format_module(s)`) | Same body as `markdown` wrapped in vendor-neutral YAML frontmatter; loadable by Claude Code / Gemini CLI without per-vendor branching |
+
+**Decision rule for contributors adding a new format**: ask *"do two
+consumers — one written in Python and one in Rust — need to produce
+identical bytes?"*. If **yes** → contribute the implementation to
+`apcore-toolkit` and add a conformance fixture under
+`conformance/fixtures/`. If **no** → the format is presentation-local
+and belongs in the consuming CLI / bridge / app.
+
+The mirror table also lives in
+[`apcore-cli/docs/features/output-formatter.md`](https://github.com/aiperceivable/apcore-cli/blob/main/docs/features/output-formatter.md)
+§ 4.1.
+
 ---
 
 ## Core Modules
@@ -224,6 +247,57 @@ See [`docs/features/formatting.md`](docs/features/formatting.md) § Tabular Form
 | `Verifier` / `VerifyResult` | Protocol and result type for pluggable output verification |
 | `DisplayResolver` | Sparse binding.yaml display overlay — resolves surface-facing alias, description, guidance, tags into `metadata["display"]` |
 | `ConventionScanner` | Scans a `commands/` directory of plain Python files for public functions and converts them to `ScannedModule` instances with schema inferred from type annotations |
+
+### Per-language module availability (tri-language parity)
+
+Most modules above ship in all three SDKs (`apcore-toolkit-python`,
+`apcore-toolkit-typescript`, `apcore-toolkit-rust`). The exception is
+the convention scanner, which is intentionally **not** uniform across
+languages — it relies on language-specific introspection that does not
+port cleanly.
+
+| Module | Python | TypeScript | Rust | Rationale |
+|---|---|---|---|---|
+| `BaseScanner` (abstract base) | ✅ | ✅ | ✅ | Generic framework-scanner trait — object-safe in all languages |
+| `ConventionScanner` (pydantic-based plain-functions scanner) | ✅ | ❌ **intentionally absent** | ❌ **intentionally absent** | The scanner walks `pydantic.BaseModel` subclasses for endpoint metadata and infers JSON Schema from type annotations. TypeScript has no pydantic equivalent (TypeBox / Zod are runtime-shape-distinct); Rust framework adapters live in separate crates (`axum-apcore`, `actix-apcore`) and own their own scanner logic. See `apcore-toolkit-typescript/src/index.ts` § "Tri-language parity note" and `apcore-toolkit-rust/src/scanner.rs` for the source-level notes. |
+
+**Replacement for TypeScript framework integrators**: use `YAMLWriter`
+to declaratively express endpoint metadata in a `.binding.yaml` file and
+let `BindingLoader` parse it back. The binding-loader pipeline is the
+TypeScript-friendly equivalent of convention scanning. Framework-specific
+TypeScript adapters (Express, Fastify, Hono) should provide their own
+`BaseScanner` implementation that walks the framework's native route
+registry rather than try to mimic the pydantic pattern.
+
+---
+
+## Version Compatibility
+
+apcore-toolkit is part of the broader apcore ecosystem. Snapshot below is
+the **currently tested combination** (2026-05-18). Full cross-ecosystem
+matrix lives in [`apcore` README](https://github.com/aiperceivable/apcore#version-compatibility).
+
+| Component | Tested with | Notes |
+|---|---|---|
+| `apcore` core SDK | 0.22.0 | apcore-toolkit-python / -rust pin `apcore` as required runtime dep |
+| Consumers (`apcore-cli`, `apcore-mcp`, `apcore-a2a`) | tested with `apcore-toolkit 0.7.0` | All declare apcore-toolkit as required runtime dep — no soft-degrade fallback |
+
+### Known consumer-pin divergence (tracked as issue 6.8)
+
+Different consumers pin apcore-toolkit with inconsistent strategies:
+
+| Consumer | Pin | Effective range |
+|---|---|---|
+| apcore-cli-python | `apcore-toolkit>=0.7.0` | open upper |
+| apcore-cli-typescript | `"apcore-toolkit": ">=0.7.0"` | open upper |
+| apcore-cli-rust | `apcore-toolkit = "=0.7.0"` | exact pin |
+| apcore-mcp-python | `apcore-toolkit>=0.7.0` | open upper |
+| apcore-mcp-typescript | `"apcore-toolkit": "^0.7.0"` | caret (0.7.x only — blocks 0.8+) |
+| apcore-mcp-rust | `apcore-toolkit = "0.7"` | caret-shorthand (blocks 0.8+) |
+
+When releasing apcore-toolkit 0.8+, all consumers with closed upper bounds
+need a coordinated bump. The follow-up plan is to standardize on caret
+semantics (`^0.7` / `>=0.7,<0.8`) consistently across all three languages.
 
 ---
 
