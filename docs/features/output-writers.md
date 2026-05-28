@@ -98,10 +98,10 @@ Generates source files containing decorator-based wrapper functions. This is use
 ### Inputs
 - `modules`: list of `ScannedModule`, required
 - `outputDir`: string, required — directory where generated `.ts` files will be written
-- `options`: object, optional — `{ dryRun?: boolean, verify?: boolean, verifiers?: Verifier[] }`
+- `options`: object, optional — `{ dryRun?: boolean, verify?: boolean, verifiers?: Verifier[], errorMode?: "throw" | "collect" }`. `errorMode` (default `"throw"`) is the shared `FileWriteOptions` flag — see the `YAMLWriter.write` Contract for full semantics.
 
 ### Errors
-- `WriteError(path, cause)` — file system write failure
+- `WriteError(path, cause)` — file system write failure (only when `errorMode="throw"`; `"collect"` captures it in the returned `WriteResult`)
 - All SDKs wrap verifier exceptions into `WriteResult.verificationError` rather than re-raising
 
 ### Returns
@@ -750,9 +750,13 @@ Writers never silently swallow errors. If `verify=False`, verification is skippe
 - `dry_run`: bool, optional, default=false — if true, no files are written; returns what would be written
 - `verify`: bool, optional, default=false — if true, runs built-in `YAMLVerifier` after writing each file
 - `verifiers`: list of verifier objects, optional — additional custom verifiers to run after write
+- **TypeScript-only option:** `options.errorMode: "throw" | "collect"` (default: `"throw"`) — applies to the file writers (`YAMLWriter`, `TypeScriptWriter`), defined on `FileWriteOptions`.
+  - `"throw"` — raises `WriteError` on the first file-system write failure (default).
+  - `"collect"` — accumulates failures into `WriteResult` objects instead of throwing; useful for batch writes where you want to continue after individual failures.
+  - Python and Rust file writers always raise/return-`Err` on write failure (no `errorMode` equivalent). `RegistryWriter` does **not** support `errorMode` in any language (it always collects — see its Contract).
 
 ### Errors
-- `WriteError` / `WriteError` — file system write failure
+- `WriteError` / `WriteError` — file system write failure (in TypeScript, only when `errorMode="throw"`; with `"collect"` the failure is captured in the returned `WriteResult`)
 - All three SDKs wrap verifier results into `WriteResult.verification_error` (Python/Rust) / `WriteResult.verificationError` (TypeScript). Verifier exceptions are caught and stored as verification errors rather than being re-raised.
 
 ### Returns
@@ -776,13 +780,14 @@ Each `WriteResult` has `module_id`, `path`, `ok`, `verified`, `verification_erro
 - `dry_run`: bool, optional, default=false — if true, no modules are registered; returns what would be registered
 - `verify`: bool, optional, default=false — if true, runs built-in `RegistryVerifier` after each registration
 - `verifiers`: list of verifier objects, optional — additional custom verifiers
-- **TypeScript-only option:** `options.errorMode: "throw" | "collect"` (default: `"throw"`)
-  - `"throw"` — raises `WriteError` on first failure (default behavior, matches Python/Rust)
-  - `"collect"` — accumulates failures into `WriteResult` objects instead of throwing; useful for batch operations where you want to continue after individual failures
+- `allowed_prefixes` / `allowedPrefixes`: list of str, optional, default=`None`/`undefined` (no restriction) — security allow-list of permitted module-id target prefixes. When set, each module's resolved target is validated against the list before registration; a target outside the allow-list is rejected as a per-module failure (see Errors). Defence-in-depth against arbitrary-code-execution via attacker-influenced targets. Present and consistent across all three SDKs (`registry_writer.py`, `registry-writer.ts`, `registry_writer.rs`).
+
+> **Note:** `RegistryWriter.write` does **not** accept an `errorMode` option. Unlike the file writers, it never aborts the batch on a per-module failure — see Errors below. The `errorMode: "throw" | "collect"` option belongs to the file writers (`YAMLWriter` / `TypeScriptWriter`), documented under their Contracts.
 
 ### Errors
-- `WriteError` — registration failure (e.g., registry rejected the module)
-- All three SDKs wrap verifier results into `WriteResult.verification_error` (Python/Rust) / `WriteResult.verificationError` (TypeScript). Verifier exceptions are caught and stored as verification errors rather than being re-raised.
+- `RegistryWriter.write` **collects** per-module failures rather than raising — this is identical across Python, TypeScript, and Rust. If target resolution, the `allowed_prefixes` check, or `registry.register` fails for a module, that module gets a failed `WriteResult` (`verified=false`, `verification_error`/`verificationError` set) and the batch **continues**; one bad module never aborts the rest.
+- Verifier results are likewise wrapped into `WriteResult.verification_error` (Python/Rust) / `WriteResult.verificationError` (TypeScript); verifier exceptions are caught and stored, not re-raised.
+- Rust returns `Result<Vec<WriteResult>, ...>` for signature parity, but per-module registration failures are reported via failed `WriteResult` entries inside `Ok(...)`, not via the outer `Err`.
 
 ### Returns
 - On success: list of `WriteResult` — one per module; `path` is `None`/`null` (no file written)
@@ -790,7 +795,18 @@ Each `WriteResult` has `module_id`, `path`, `ok`, `verified`, `verification_erro
 ### Properties
 - async: `false` (Python, Rust) / `true` (TypeScript) — the TypeScript `RegistryWriter.write` returns `Promise<WriteResult[]>` because it `await`s `resolveTarget(target)` internally (dynamic module resolution). Python and Rust resolve targets synchronously. TypeScript callers must `await` the call: `await writer.write(modules, registry)`.
 - pure: false (mutates registry unless dry_run=true)
-- idempotent: false (registering the same module_id twice may overwrite or raise depending on registry configuration)
+- idempotent: false — registering the same `module_id` twice raises `InvalidInputError(code=DUPLICATE_MODULE_ID)` (apcore 0.22.0+). `RegistryWriter.write` registers modules sequentially; a duplicate appears as a failed `WriteResult` entry in the returned list and the batch continues.
+
+!!! info "StreamingModule support (apcore 0.22.0+)"
+    `RegistryWriter` automatically detects and handles streaming targets:
+
+    - **Python / TypeScript** — if the resolved target has an async `stream()` method, `RegistryWriter` wraps it in a streaming-capable adapter (`_StreamingFunctionModule` / `StreamingFunctionModule`) that satisfies the `StreamingModule` Protocol / interface. The adapter passes `isinstance(m, StreamingModule)` / `isStreamingModule(m)` without triggering the duck-typing deprecation warning.
+    - **Rust** — supply a `StreamingHandlerFactory` via `RegistryWriter::with_streaming_handler_factory(factory)`. When the factory returns `Some(stream_fn)` for a module's `target`, the module is registered as a `StreamingFunctionModule` (implements both `Module` and `StreamingModule`, so `module.as_streaming()` returns `Some`).
+
+    If `annotations.streaming=True` but the target provides no streaming implementation (no async `stream()` method in Python/TypeScript, or the factory returns `None` in Rust), `RegistryWriter` logs a **WARNING** and clears the `streaming` flag so `Registry.register` does not raise `StreamingInterfaceError`. The module is registered as a non-streaming `FunctionModule`.
+
+!!! tip "Registration Ordering Invariant (apcore 0.22.0+)"
+    `RegistryWriter.write` registers modules sequentially. Under apcore 0.22.0's deferred-publish guarantee, each module is not visible to `registry.get()` / `registry.list()` until its `on_load` callbacks complete. When `write()` returns, all successfully registered modules are guaranteed to be immediately discoverable.
 
 ---
 

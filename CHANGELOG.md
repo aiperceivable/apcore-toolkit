@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0] - 2026-05-28
+
+Aligned release across Python, TypeScript, and Rust. Bumps the required apcore runtime to 0.22.0 and versions all three SDKs to 0.8.0. No changes to toolkit API surface or conformance fixtures.
+
+### Changed
+
+- **Required runtime bumped to apcore 0.22.0** — `docs/getting-started.md` prerequisites updated from `apcore 0.21.0+` to `apcore 0.22.0+`. Rust SDK dependency updated from `apcore = "0.21"` (caret: `>=0.21.0, <0.22.0`) to `apcore = "0.22"` — the prior caret constraint excluded 0.22.0 entirely, making this a required fix for users on the latest apcore. Python and TypeScript constraints bumped from `apcore>=0.21.0` / `apcore-js>=0.21.0` to `>=0.22.0` for consistency. Toolkit's stable surface (`ModuleAnnotations`, `Registry`, `ModuleExample`, `parse_docstring`, `Module`, `Context`, `errors`, `annotationsFromJSON`/`annotationsToJSON`) is unchanged by the 0.21 → 0.22 delta; all three SDKs pass full test suites without code changes.
+
+  **apcore 0.22.0 changes *in scope* for the toolkit:**
+
+  - **`Registry.register()` concurrent same-ID rejection (D-65)** — 0.22.0 rejects the second concurrent caller immediately with `InvalidInputError(code=DUPLICATE_MODULE_ID)` instead of resolving via lock-ordering. `RegistryWriter.write()` registers modules sequentially and is unaffected under normal usage; callers who concurrently invoke `write()` on overlapping module sets will now see deterministic immediate rejection instead of a race outcome. The `idempotent: false` property note in `docs/features/output-writers.md` updated to reflect the 0.22.0 behavior.
+
+  - **Registration Ordering Invariants (D-65)** — modules are now guaranteed not to become visible to `registry.get()` / `registry.list()` until all `on_load` callbacks have completed. `RegistryWriter.write()` returns only after all registrations finish; callers can now rely on modules being immediately discoverable on return.
+
+  - **`StreamingModule` explicit interface** — apcore 0.22.0 promotes `StreamingModule` from duck-typed to an explicit Protocol / interface / trait. `RegistryWriter` now detects and handles streaming targets across all three SDKs:
+    - **Python / TypeScript** — if the resolved target has an async `stream()` method, `RegistryWriter._to_function_module` / `_toFunctionModule` creates a streaming adapter (`_StreamingFunctionModule` / `StreamingFunctionModule`) that satisfies `isinstance(m, StreamingModule)` / `isStreamingModule(m)` without the duck-typing deprecation warning. The adapter's execute path delegates to the target's `execute()` method (or callable form); the stream path delegates to `target.stream()`.
+    - **Rust** — new `StreamingHandlerFactory` type and `RegistryWriter::with_streaming_handler_factory(factory)` builder. When the factory returns `Some(stream_fn)` for a target, `RegistryWriter` registers a `StreamingFunctionModule` that implements both `Module` and `StreamingModule` (`as_streaming()` returns `Some(self)`).
+    - **Fallback (all SDKs)** — if `annotations.streaming=True` but no streaming implementation is found (no async `stream()` method / factory returns `None`), `RegistryWriter` logs a WARNING and clears the `streaming` flag to prevent `StreamingInterfaceError`. The module is registered as a non-streaming `FunctionModule`.
+    - Three new streaming unit tests per SDK. `docs/features/output-writers.md` `Contract: RegistryWriter.write` streaming admonition updated from a limitation warning to usage documentation.
+
+  **apcore 0.22.0 changes *out of scope* for the toolkit** (not consumed by the toolkit's stable surface):
+  - `Context.create()` signature unified — `executor` and `caller_id` parameters removed, `cancel_token` promoted as first-class parameter (D-24). Toolkit does not call `Context.create()`.
+  - Canonical event name renames — `apcore.module.registered` → `apcore.registry.module_registered`, `apcore.module.unregistered` → `apcore.registry.module_unregistered`, `apcore.error.threshold_exceeded` → `apcore.health.error_threshold_exceeded`, `apcore.latency.threshold_exceeded` → `apcore.health.latency_threshold_exceeded`. Toolkit does not emit or subscribe to apcore events.
+  - `TaskStore` fully-async requirement (D-17), `cancel()` real-interrupt requirement (D-18), `call_with_trace` error semantics (D-19), cancellation short-circuit (D-20), cancel token two-point check (D-21), `MiddlewareChainError` unwrap (D-22), shallow-copy `get_status` / `list_tasks` (D-23).
+  - Rust `TraceParent` gains `tracestate: Vec<(String, String)>` field; `ContextBuilder::tracestate()` removed. Toolkit does not construct `TraceParent` or use `ContextBuilder`.
+  - `A2ASubscriber` now retries 3× on 5xx/timeout by default; reserved namespace query `Config.reserved_namespaces()`; Duplicate Middleware Detection normative SHOULD.
+
+### Documentation
+
+- **`docs/features/output-writers.md`** — `Contract: RegistryWriter.write` updated: `idempotent` property corrected to reflect 0.22.0 immediate `DUPLICATE_MODULE_ID` rejection; new `StreamingModule` warning admonition; new Registration Ordering tip admonition.
+- **`docs/getting-started.md`** — prerequisites updated from `apcore 0.21.0+` to `apcore 0.22.0+` across all three language tabs.
+
 ## [0.7.0] - 2026-05-12
 
 Aligned release across Python, TypeScript, and Rust. Adds **byte-equivalent tabular formatters** (`format_csv`, `format_jsonl`) for cross-SDK consistency, with shared conformance corpus and updated formatting spec. Lifts a class of bugs that previously affected every apcore-cli SDK's `--format csv` / `--format jsonl` implementation. Includes the post-audit cross-SDK contract reconciliation pass (D10 contract-parity findings).
