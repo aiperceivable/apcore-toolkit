@@ -1,3 +1,7 @@
+---
+description: "Install apcore-toolkit (Python/TypeScript/Rust) and build a custom scanner to extract metadata and generate AI-perceivable outputs."
+---
+
 # Getting Started with apcore-toolkit
 
 This guide walks you through installing **apcore-toolkit** and using its core modules to extract metadata from your code and generate AI-perceivable outputs.
@@ -7,17 +11,17 @@ This guide walks you through installing **apcore-toolkit** and using its core mo
 === "Python"
 
     - **Python**: 3.11+
-    - **apcore**: 0.22.0+
+    - **apcore**: 0.24.0+
 
 === "TypeScript"
 
     - **Node.js**: 20+
-    - **apcore**: 0.22.0+
+    - **apcore**: 0.24.0+
 
 === "Rust"
 
     - **Rust**: 1.70+ (edition 2021)
-    - **apcore**: 0.22.0+
+    - **apcore**: 0.24.0+
 
 ---
 

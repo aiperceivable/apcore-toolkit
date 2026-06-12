@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2026-06-12
+
+Aligned release across Python, TypeScript, and Rust. Bumps the required apcore runtime to 0.24.0 (skipping 0.23.0 — no in-scope changes). No changes to toolkit API surface or conformance fixtures.
+
+### Changed
+
+- **Required runtime bumped to apcore 0.24.0** — `docs/getting-started.md` prerequisites updated from `apcore 0.22.0+` to `apcore 0.24.0+`. Python constraint bumped from `apcore>=0.22.0` to `>=0.24.0`; TypeScript from `apcore-js>=0.22.0` to `>=0.24.0`. Rust SDK updated to `apcore = "0.23"` — apcore 0.24.0 is not yet published to crates.io; a follow-up patch will advance it to `"0.24"` once indexed. Toolkit's stable surface (`ModuleAnnotations`, `Registry`, `ModuleExample`, `parse_docstring`, `Module`, `Context`, `errors`, `annotationsFromJSON`/`annotationsToJSON`) is unchanged by the 0.22 → 0.24 delta; all three SDKs pass full test suites without code changes.
+
+  **apcore 0.23.0 changes *in scope* for the toolkit:**
+
+  - None. apcore 0.23.0 adds AI error-recovery metadata to `ModuleError` (the `user_fixable` / `ai_guidance` policy) and rewrites `CircuitBreakerMiddleware` to a rolling-window model. Neither touches the toolkit's stable surface — the toolkit does not instantiate `CircuitBreakerMiddleware` or construct `ModuleError` with recovery metadata fields.
+
+  **apcore 0.24.0 changes *in scope* for the toolkit:**
+
+  - None. apcore 0.24.0 scopes `ToggleState` to per-`APCore`-instance and adds conformance coverage for agent governance and toggle isolation. The toolkit does not use `ToggleState`, `APCore`, or `ACL` directly. The TypeScript `Registry.unregister()` drain-state fix (A-D-001) is downstream of `RegistryWriter`'s path — `RegistryWriter` only calls `register`, not `unregister`.
+
+  **apcore 0.23.0 changes *out of scope* for the toolkit:**
+  - `CircuitBreakerMiddleware` rewritten to rolling-window error-rate model (breaking constructor: `failure_threshold`/`success_threshold` removed, `open_threshold`/`window_size`/`min_samples` added). Toolkit does not use circuit-breaker middleware.
+  - `A2ASubscriber` no longer retries 4xx responses. Toolkit does not subscribe to apcore events.
+  - DLQ `original_event` now nests `module_id`/`timestamp` under `metadata`. Toolkit does not emit apcore events.
+  - AI error-recovery metadata (`user_fixable`, `ai_guidance`) populated in `ModuleError` at the framework level. Toolkit re-raises `ModuleError` from `RegistryWriter` but does not construct them with recovery metadata.
+
+  **apcore 0.24.0 changes *out of scope* for the toolkit:**
+  - Per-instance `ToggleState` isolation (all three SDKs, #71). Toolkit does not construct `APCore` instances.
+  - `Registry.unregister()` drain-state fix (TypeScript A-D-001). Toolkit's `RegistryWriter.write()` calls `register` only.
+  - Sensitive-key redaction recurses into arrays (TypeScript/Rust A-D-003). Toolkit does not call redaction utilities.
+  - Env value coercion and namespace fallback alignment (TypeScript A-D-008, Rust A-D-007/009). Toolkit does not read apcore `Config`.
+  - Before-middleware double `on_error` fire (TypeScript A-D-011), ACL `removeRule(null)` conditions fix (A-D-016), `error details` key casing (`camelCase` → `snake_case` A-D-019). Toolkit does not install middleware or manage ACL rules.
+  - Rust: schema type coercion enabled by default; `SchemaValidator` returns coerced value. Toolkit conformance fixtures (`format_csv`, `format_jsonl`, `display_resolve`) do not exercise schema validation.
+  - Rust: registry event delivery-or-DLQ guarantee (A-D-013), middleware `on_error` exact-once fix (A-D-010/012), mid-stream error recovery (A-D-015), `APCore.on()`/`events()` shared event bus fix (D1-011).
+
+### Documentation
+
+- **`docs/getting-started.md`** — prerequisites updated from `apcore 0.22.0+` to `apcore 0.24.0+` across all three language tabs.
+- **`README.md`** — SDK badges updated to 0.8.1; apcore badge updated to 0.24.0+; version compatibility snapshot updated to 0.24.0 / apcore-toolkit 0.8.1 (dated 2026-06-12).
+
 ## [0.8.0] - 2026-05-28
 
 Aligned release across Python, TypeScript, and Rust. Bumps the required apcore runtime to 0.22.0 and versions all three SDKs to 0.8.0. No changes to toolkit API surface or conformance fixtures.
