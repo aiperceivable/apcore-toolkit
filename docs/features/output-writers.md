@@ -1,3 +1,7 @@
+---
+description: "Writers exporting ScannedModule metadata: YAMLWriter for .binding.yaml, PythonWriter/TypeScriptWriter for decorator source, and direct Registry registration."
+---
+
 # Output Writers
 
 `apcore-toolkit` provides several ways to export the `ScannedModule` metadata into formats used by the `apcore` ecosystem.

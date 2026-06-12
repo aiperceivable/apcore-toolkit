@@ -1,3 +1,7 @@
+---
+description: "Extract JSON Schemas from OpenAPI operations: merge path/query/body params into input_schema, pull 200/201 output_schema, and resolve nested $ref."
+---
+
 # OpenAPI Integration
 
 The `apcore_toolkit.openapi` module provides utilities for extracting JSON Schemas directly from an OpenAPI specification, either by parsing the JSON document or by interacting with live OpenAPI endpoints.

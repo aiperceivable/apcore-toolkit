@@ -1,3 +1,7 @@
+---
+description: "Pure-data BindingLoader parses .binding.yaml back into ScannedModule objects (inverse of YAMLWriter), with strict/loose modes for validation and round-trip."
+---
+
 # Binding Loader
 
 The `BindingLoader` parses `.binding.yaml` files back into `ScannedModule` objects — the inverse of [`YAMLWriter`](output-writers.md#yamlwriter). Available in **Python**, **TypeScript**, and **Rust**.

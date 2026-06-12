@@ -1,3 +1,7 @@
+---
+description: "DisplayResolver applies a sparse binding.yaml overlay resolving alias, description, guidance, and tags into metadata[\"display\"] for CLI/MCP/A2A surfaces."
+---
+
 # Display Overlay
 
 The `DisplayResolver` applies a sparse `binding.yaml` overlay to a list of `ScannedModule` objects, resolving surface-facing presentation fields — alias, description, guidance, tags, and documentation — into `metadata["display"]` for downstream CLI, MCP, and A2A consumers.

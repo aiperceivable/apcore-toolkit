@@ -1,3 +1,7 @@
+---
+description: "Formatting utilities converting data structures to Markdown via to_markdown(), with depth control and table heuristics for AI-perceivable documentation."
+---
+
 # Formatting Utilities
 
 `apcore-toolkit` includes powerful tools for converting complex data structures into formatted, human-readable Markdown. This is especially useful for creating "AI-perceivable" documentation or for logging results in a readable format.

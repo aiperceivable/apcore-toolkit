@@ -1,3 +1,7 @@
+---
+description: "What apcore-toolkit does and does not do: a shared adapter utility library, not a CLI-tool scanner and not apcore itself."
+---
+
 # Scope & Boundaries
 
 This document defines what `apcore-toolkit` **does** and **does not do**, to guide contributors and downstream projects.

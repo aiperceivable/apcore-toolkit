@@ -1,3 +1,7 @@
+---
+description: "Layered Enhancer protocol filling metadata gaps static analysis misses: built-in AIEnhancer, apcore-refinery, custom implementations."
+---
+
 # AI-Driven Metadata Enhancement
 
 This document specifies how `apcore-toolkit` fills metadata gaps that static analysis cannot resolve, through a layered enhancement architecture.

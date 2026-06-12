@@ -1,3 +1,7 @@
+---
+description: "Python-only ConventionScanner discovers plain functions in a commands/ directory as ScannedModules via importlib, with zero decorators or imports."
+---
+
 # Convention Scanning
 
 The `ConventionScanner` discovers plain Python functions as apcore modules from a `commands/` directory -- zero decorators, zero imports required. Each public function becomes a `ScannedModule` with schema inferred from type annotations and description extracted from docstrings.

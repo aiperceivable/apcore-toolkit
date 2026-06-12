@@ -1,3 +1,7 @@
+---
+description: "Python-only flatten_pydantic_params() unwraps Pydantic model parameters into flat scalar kwargs so AI agents and MCP can call functions directly."
+---
+
 # Schema Utilities
 
 Modern web frameworks use structured models (Pydantic in Python, Zod/interfaces in TypeScript) for request and response validation. `apcore-toolkit` provides utilities to bridge the gap between structured models and the flat interface often required by AI tools.

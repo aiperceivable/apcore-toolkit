@@ -1,3 +1,7 @@
+---
+description: "Index of apcore-toolkit features (scanning, OpenAPI, writers, binding loader, formatting, enhancement, display overlay) with the per-SDK parity table."
+---
+
 # Features Overview
 
 `apcore-toolkit` is a collection of framework-agnostic utilities designed to help you extract, refine, and export metadata from your existing codebase, making it "AI-Perceivable". Available for **Python**, **TypeScript**, and **Rust**.

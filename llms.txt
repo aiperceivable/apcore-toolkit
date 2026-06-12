@@ -1,0 +1,43 @@
+# apcore-toolkit
+
+> Shared scanner, schema extraction, and output toolkit that apcore framework adapters build on — the common plumbing behind apcore-mcp, apcore-cli, and the framework integrations.
+
+apcore-toolkit provides reusable building blocks for adapters: smart scanning to discover modules, schema extraction (including from OpenAPI and Pydantic), binding loaders, and output writers/formatting. It is a library for adapter authors rather than an end-user runtime.
+
+## Start Here
+
+- [Home](https://apcore-toolkit.aiperceivable.com/): What the toolkit provides and which adapters depend on it.
+- [Getting Started](https://apcore-toolkit.aiperceivable.com/getting-started/): Use the toolkit to build or extend an apcore adapter.
+- [Scope & Boundaries](https://apcore-toolkit.aiperceivable.com/scope/): What the toolkit is responsible for and what it deliberately leaves to adapters.
+
+## Features
+
+- [Features Overview](https://apcore-toolkit.aiperceivable.com/features/overview/): Map of scanning, schema, binding, and output components.
+- [Smart Scanning](https://apcore-toolkit.aiperceivable.com/features/scanning/): Discovers modules and bindings across a project.
+- [OpenAPI Integration](https://apcore-toolkit.aiperceivable.com/features/openapi/): Extracts schemas from OpenAPI definitions.
+- [Schema Utilities](https://apcore-toolkit.aiperceivable.com/features/pydantic/): Pydantic-based schema extraction and conversion helpers.
+- [Output Writers](https://apcore-toolkit.aiperceivable.com/features/output-writers/): Render adapter output in different formats.
+- [Binding Loader](https://apcore-toolkit.aiperceivable.com/features/binding-loader/): Loads decorator/YAML bindings into module definitions.
+- [Convention Scanning](https://apcore-toolkit.aiperceivable.com/features/convention-scanning/): Convention-based discovery of modules.
+
+## More
+
+- [AI Enhancement](https://apcore-toolkit.aiperceivable.com/ai-enhancement/): How the toolkit enriches modules for better AI perception.
+- [Changelog](https://apcore-toolkit.aiperceivable.com/changelog/): Notable changes across releases.
+
+## Ecosystem
+
+- [apcore](https://apcore.aiperceivable.com/): The core module standard the toolkit supports.
+- [apcore-mcp](https://apcore-mcp.aiperceivable.com/): MCP bridge built on the toolkit.
+- [apcore-cli](https://apcore-cli.aiperceivable.com/): CLI adapter built on the toolkit.
+- [apcore-a2a](https://apcore-a2a.aiperceivable.com/): Agent-to-Agent (A2A) protocol adapter built on the toolkit.
+- [apflow](https://apflow.aiperceivable.com/): Orchestration layer for long-running, multi-step agent task workflows.
+- [AI Perceivable (ecosystem hub)](https://aiperceivable.com/): Overview of the full ecosystem — apcore (perception), apflow (orchestration), and adapters.
+
+## Key Facts
+
+- Shared library for building apcore framework adapters.
+- Provides scanning, schema extraction (OpenAPI/Pydantic), binding loading, and output writers.
+- Used by apcore-mcp, apcore-cli, and framework integrations.
+- For adapter authors, not an end-user runtime.
+- Open source. Source: https://github.com/aiperceivable/apcore-toolkit

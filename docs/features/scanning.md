@@ -1,3 +1,7 @@
+---
+description: "The BaseScanner ABC for framework adapters: filtering, deduplication, HTTP-method annotation inference, and a 5-phase ability-extraction methodology."
+---
+
 # Smart Scanning
 
 The `BaseScanner` ABC (Abstract Base Class) provides a consistent interface and shared utilities for framework-specific adapters (e.g., `django-apcore`, `flask-apcore`).

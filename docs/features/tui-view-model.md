@@ -1,3 +1,7 @@
+---
+description: "PROPOSED (not implemented) Tier-1 byte-equivalent TuiViewModel lifting module-list shape (columns, rows, filter/sort/color-by-tag) across consumers."
+---
+
 # TUI View Model — V1 Proposal
 
 !!! warning "Status: PROPOSED — not implemented"
