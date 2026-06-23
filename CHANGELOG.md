@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2026-06-23
+
+Version-aligned bug-fix release across Python, TypeScript, and Rust. Each SDK fixes a distinct correctness defect surfaced by real framework integration against the apcore 0.24.0 runtime. No conformance-fixture changes; all three test suites pass (Python 713, TypeScript 614, Rust all green).
+
+### Fixed
+
+- **Python — OpenAPI parser crashed on integer status-code keys and explicit `null`.** `extract_output_schema` assumed string response keys, so django-ninja's integer keys (`{200: ...}`) raised `TypeError` in `re.match`/`sorted`; `null` responses/content/requestBody/properties/required raised `AttributeError`. Keys are now normalized to strings and null containers fall back to empty. (7 new regression tests.)
+- **TypeScript — registry verification and async registration were broken against the real `Registry`.** `RegistryVerifier` called the nonexistent `getModule()` (apcore exposes `get()`), so `verify: true` always failed; and `RegistryWriter.write` did not `await` the async `register()`, risking unhandled rejections and premature verification. Both fixed.
+- **Rust — registry writers required `&mut Registry`, blocking framework integration.** apcore's `Registry` is interior-mutable (`register(&self, …)`) and executors only expose `Arc<Registry>`. `RegistryWriter::write` and `HttpProxyWriter::write` now take `&Registry` (source-compatible — `&mut T` coerces to `&T`).
+
+### Cross-SDK note
+
+These were independent per-language defects, not a shared-contract change — each SDK's stable surface is otherwise unchanged. The Rust signature relaxation is the only API-surface change and is backward-compatible at existing call sites.
+
 ## [0.8.1] - 2026-06-12
 
 Aligned release across Python, TypeScript, and Rust. Bumps the required apcore runtime to 0.24.0 (skipping 0.23.0 — no in-scope changes). No changes to toolkit API surface or conformance fixtures.
