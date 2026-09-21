@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+Two independent bodies of work, deliberately kept as separate releases rather than one. **0.12.0** closes a latent spec gap in `BindingLoader`; **0.13.0** adds the toolkit's first credential-handling surface. They are separated because Python and TypeScript have no feature flag for the latter, so a consumer's only lever for keeping an OAuth client out of its dependency graph is the version number. (Rust additionally gates it behind a `device-auth` cargo feature; `cargo check --no-default-features` is asserted so `apexe`, which depends on this crate that way, is untouched.)
+
+---
+
+## [0.13.0] - unreleased
+
+Adds the **RFC 8628 Device Authorization Flow client** ([#17](https://github.com/aiperceivable/apcore-toolkit/issues/17)) — the protocol half of the credential story, in all three SDKs, asserted byte-equivalent by a shared 64-case corpus.
+
+### Added
+
+- **`DeviceAuthClient`, `DeviceAuthConfig`, `TokenSet`, `TokenStore`, `FileTokenStore`, `Grant` / `DeviceCodeGrant`** and the four extension hooks. The toolkit writes nothing to a terminal: it emits events, and the consumer renders them. See [`docs/features/device-auth.md`](docs/features/device-auth.md).
+- **`conformance/fixtures/device_auth.json`** — 64 cases across ten case kinds. **No HTTP mocking is required in any SDK**: the state machine is pure over an injected monotonic clock and a scripted response sequence, so a harness feeds responses in order and records the sleeps. Written, reviewed, and committed *before* any SDK started, the same ordering that gave `TuiViewModel` zero divergences and whose absence gave `csv`/`jsonl` three independent bugs.
+- **V1 ships device flow only**, with the `Grant` interface in place so a second grant is one implementation against a stable seam rather than a rewrite. This is a deliberate scope-down from the proposal's own recommendation (device flow + manual code entry + PKCE): PKCE widens the exact surface whose risk mitigation depends on being narrow, and no consumer has yet named a provider lacking device-flow support. The decision reverses the moment one does.
+
+### Changed
+
+- **`HTTPProxyRegistryWriter.authHeaderFactory` (TypeScript) widened to `Record | Promise<Record>`** and awaited — backward-compatible, since awaiting a non-promise is a no-op. Without it `asAuthHeaderFactory()` could not plug into its own stated integration point. Rust adds a separate `as_async_auth_header_factory()` rather than changing the existing signature; Python stays synchronous because its `httpx` path already is.
+
+### Spec amendments made during implementation
+
+Each was found by an SDK implementer and is recorded in `device-auth.md` with its date and reason:
+
+- **The cross-origin endpoint rule contradicted itself and the corpus.** It said discovered endpoints "SHOULD share the issuer's origin" and that a cross-origin one "is rejected rather than followed" — `SHOULD` and "rejected" cannot both hold, and case 029 requires such an endpoint to be used. Resolved: `https://` is a hard error; a different origin is a warning and is followed. Rejecting breaks providers that host the token endpoint on a separate host, and the document's authority is already established by fetching from the issuer's own well-known path over TLS plus a verbatim issuer comparison.
+- **`classify_error`'s invocation rule was never stated.** "Always call, alias wins" and "call only when unresolved" produce identical results for a pure hook — so both pass a corpus that does not pin it, while differing observably for a hook with side effects. Now: consulted only when the identifier is still unresolved.
+- **The injected-clock table named two clocks; there are three.** The monotonic clock measures the polling deadline; a separate wall clock computes `expires_at`. Case 015 pinned the wall clock while the prose never named it, so three SDKs would have named it three ways.
+- **Poll-loop ordering is now normative** (sleep → check deadline → poll). The corpus pinned it; the prose did not, and it is the most likely off-by-one in the implementation.
+- **The store key was undefined when no `issuer` is configured** — a first-class path, since explicit endpoints are supported. Now falls back to the token endpoint.
+- **`error_aliases` does not apply on the refresh path.** Otherwise the one alias the spec explicitly describes (`invalid_grant` → `expired_token`) would disable the one terminal rule protecting the store.
+- **`on_user_code` receives the *effective* deadline, never null.** Found as a live three-way divergence after all three landed: Python passed the 900-second fallback, TypeScript and Rust passed the absent wire value.
+- **`client_secret_basic` form-urlencodes before base64** (RFC 6749 §2.3.1). Raw concatenation is a real defect — a secret containing `+` reaches the server as one containing a space.
+
+### Corpus cases that could not fail, and were rewritten
+
+Recorded rather than quietly fixed, because a case that cannot fail reports coverage that does not exist:
+
+- **045 and 046** were vacuous. 045 supplied no error body, so a harness inventing a *standard* identifier resolved it before the hook was ever reached; 046 used `access_denied`, which resolves without the hook, so it passed whatever the hook did. Both now carry a deliberately unresolved identifier.
+- **054 and 055** both omitted `device_authorization_endpoint`, so discovery failed whether or not the issuer check fired — an implementation that normalises the issuer before comparing passed both. Found by mutation testing in the TypeScript SDK.
+- **058 and 061 were written as exact-byte assertions and rewritten as round trips.** The three languages' form encoders disagree on space, `*` and `~`, and every one of those spellings decodes identically — so pinning one would have forced two SDKs to hand-roll an encoder for no functional gain. This is the repository's own ownership rule applied rather than assumed: byte-equivalence is for formats two consumers must compare, and the consumer here is a third-party authorization server that decodes.
+
+---
+
+## [0.12.0] - unreleased
+
+### Added
+
+- **`BindingLoader.load` gains `pattern`** ([#18](https://github.com/aiperceivable/apcore-toolkit/issues/18)) — apcore 0.30 made `bindings.pattern` a canonical config default, but the toolkit loader hardcoded the value and had no parameter through which a caller could honour a configured one. Any consumer needing the loader's *return value* rather than apcore's registration side effect (e.g. `apexe`, which builds its own `CliModule` from each descriptor) silently dropped the key. `load` now takes the resolved pattern; **the loader takes a value and does not read `Config`**, keeping the pure-data layer dependency-free and leaving resolution with the caller that actually holds a `Config`. Python and TypeScript gain an optional parameter; Rust gains `load_with_pattern` and keeps `load`'s arity, mirroring apcore's own `load_binding_dir` / `load_binding_dir_with_config` two-tier shape. See [`docs/features/binding-loader.md`](docs/features/binding-loader.md#pattern-matching).
+- **`conformance/fixtures/binding_pattern.json`** — 43 shared cases (5 `validate`, 27 `match`, 11 `select`) pinning the matcher, the rejected patterns, how `pattern` composes with `recursive`, and the filesystem-entry rules (directories never match; the file-type check follows symlinks, so a symlinked binding file is selected while a symlinked directory is neither selected nor descended into; a dangling link is skipped, not read). The spec carries the matching **algorithm** in pseudocode, not just the syntax, because three independent implementations converge only if the algorithm is fixed: the two-pointer single-star-backtracking match, over Unicode code points, in bounded time.
+
+### Changed
+
+- **`docs/scope.md` — the "token management" exclusion is disambiguated.** It previously read as an undifferentiated exclusion covering anything token-shaped. It now separates `apflow`'s two token concerns (LLM context-token budgeting; issuing `apflow`'s own service JWTs) from third-party credential *acquisition*, and admits the latter to the toolkit on the narrow grounds that the toolkit already ships the `auth_header_factory` seam it fills. This unblocks [#17](https://github.com/aiperceivable/apcore-toolkit/issues/17) Phase 0.
+- **`docs/features/device-auth.md` — status PROPOSED → ACCEPTED.** Both blocking prerequisites are resolved and all six open questions have recorded verdicts. Still **no code**: Phase 2 is ~2000 LOC across three SDKs and its conformance corpus, the gating artifact, is not written. Notably, V1 grant scope was narrowed from the document's own recommendation (device flow + manual code entry + PKCE) to device flow only, with the `Grant` interface retained so the wider scope stays one implementation away rather than a rewrite.
+- **`docs/features/tui-view-model.md` — the five open questions have recorded verdicts**, checked against what actually shipped in 0.11.1 rather than what was recommended. Four were adopted as written. The fifth was not: the builder resolves `display.alias > module_id`, not the richer `display.cli.alias > display.alias > canonical_id` chain the proposal asked for, so a binding setting only `display.cli.alias` still renders differently in `apcore-cli` than in the view model. Recorded as follow-up instead of closed quietly.
+
+### Fixed
+
+- **`docs/features/output-writers.md` — the `auth_header_factory` invocation contract is documented**, verified against the shipped 0.11.1 sources in all three SDKs: invoked **once per outbound request** from inside `execute` (so a rotating credential works without a writer change), and **synchronous** in all three (so an async credential source cannot refresh inside it). This resolves [#17](https://github.com/aiperceivable/apcore-toolkit/issues/17) Phase 1.
+- **`docs/features/binding-loader.md` — three TypeScript examples were wrong.** The `load` examples showed `loader.load("users.binding.yaml", { strict: true })` and described `recursive` as `{ recursive: true }`; `load`'s 2nd and 3rd parameters have always been positional booleans, and `BindingLoadOptions` belongs to `loadData` / `parseBindingDocument`. Confirmed by compiling the documented line (`TS2345`). The failure mode was self-concealing outside TypeScript: `{ strict: true }` is truthy, so a JavaScript caller following the docs got strict mode by accident.
+- **`docs/features/binding-loader.md` — the Rust error enum was documented as 7 variants in two places**; `InvalidPattern` makes 8.
+
+### Known cross-SDK issues found while specifying this
+
+- **apcore's own three SDKs interpret `bindings.pattern` three different ways.** `apcore-python` uses `Path.glob` (full glob incl. character classes); `apcore-rust` strips a leading `*` and suffix-matches; `apcore-typescript` does `pattern.replace('*','')` then `endsWith`. All three agree on the default `*.binding.yaml` and on essentially nothing else — `data*.yaml` matches `data1.yaml` in Python only. This is the same latent-divergence shape as #18, one layer up. The toolkit therefore specifies its own matcher and pins it with a fixture rather than inheriting an accident. To be filed upstream against `apcore`.
+- **The corpus's `empty_pattern` / `path_separator` identifiers are corpus vocabulary, not public API.** Python and TypeScript expose a single `BindingLoadError` with no machine-readable discriminator for any failure kind, so a caller cannot read the identifier off a thrown error; Rust callers can match `InvalidPattern`. A cross-SDK error-code field is worth its own issue.
+- **Non-UTF-8 file names are handled inconsistently in `apcore-toolkit-rust`** — the recursive branch converts with `to_string_lossy` (invalid bytes become U+FFFD, which can then match `*`), the flat branch uses `to_str()` and skips. Pre-existing, not covered by the fixture.
+
 ## [0.11.0] - 2026-09-06
 
 Patch release across Python, TypeScript, and Rust: raises the required apcore floor to `0.30.0`.

@@ -1,0 +1,1753 @@
+{
+  "$schema": "https://apcore.dev/schemas/conformance-fixture.json",
+  "title": "Device Authorization Flow (RFC 8628) - polling, lifecycle, provider compatibility",
+  "description": "Byte-equivalent behaviour for the RFC 8628 device-authorization client across Python / TypeScript / Rust. NO HTTP MOCKING IS REQUIRED: the state machine is pure over an injected monotonic clock and a scripted response sequence, so a harness feeds `token_responses` in order and records the sleeps. Case kinds: `poll` drives the polling state machine (`poll_delays[i]` is the sleep BEFORE `token_responses[i]`; `polls_made` counts responses actually consumed); `expiry` checks TokenSet.is_expired; `refresh` checks rotation and terminal failure; `discovery_url` is pure URL construction with no network; `discovery` scripts well-known responses; `parse` checks body parsing and field-name normalisation; `request` checks body encoding and client-authentication placement; `redaction` asserts secrets never reach a debug string; `alias_validation` checks construction-time rejection; `hook` asserts the extension-hook contracts. A case carrying `repeat_last_response: true` repeats its final scripted response indefinitely. Wall-clock `now` is pinned to 1000 wherever a case asserts `expires_at`. Tracking issue: aiperceivable/apcore-toolkit#17.",
+  "version": "1.0.0",
+  "test_cases": [
+    {
+      "id": "device_auth_poll_001_immediate_success",
+      "kind": "poll",
+      "description": "Token returned on the first poll.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      }
+    },
+    {
+      "id": "device_auth_poll_002_pending_then_success",
+      "kind": "poll",
+      "description": "authorization_pending continues polling and leaves the interval untouched.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 3
+      }
+    },
+    {
+      "id": "device_auth_poll_003_default_interval",
+      "kind": "poll",
+      "description": "An absent `interval` in the device response falls back to 5.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 2
+      }
+    },
+    {
+      "id": "device_auth_poll_004_slow_down",
+      "kind": "poll",
+      "description": "slow_down adds exactly 5 seconds (RFC 8628 §3.5), never a multiplier.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 429,
+            "body": {
+              "error": "slow_down"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          5,
+          10,
+          10
+        ],
+        "final_interval": 10,
+        "polls_made": 4
+      },
+      "notes": "The canonical case from the spec. Exponential backoff would give 5,5,10,20 and trip a rate limiter written against the RFC."
+    },
+    {
+      "id": "device_auth_poll_005_repeated_slow_down",
+      "kind": "poll",
+      "description": "Two slow_down responses add 5 twice, reaching 15 - not 5*2*2.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "slow_down"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "slow_down"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          10,
+          15
+        ],
+        "final_interval": 15,
+        "polls_made": 3
+      }
+    },
+    {
+      "id": "device_auth_poll_006_access_denied",
+      "kind": "poll",
+      "description": "access_denied terminates immediately; no further poll is made.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "access_denied"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "access_denied",
+        "poll_delays": [
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 2
+      },
+      "notes": "A third response is scripted deliberately. Consuming it would prove the client kept polling past a terminal state."
+    },
+    {
+      "id": "device_auth_poll_007_expired_token",
+      "kind": "poll",
+      "description": "expired_token terminates.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "expired_token"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "expired_token",
+        "poll_delays": [
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 2
+      }
+    },
+    {
+      "id": "device_auth_poll_008_deadline_exceeded",
+      "kind": "poll",
+      "description": "The client stops at expires_in even when the server never says expired_token.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 12,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "deadline_exceeded",
+        "poll_delays": [
+          5,
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 2
+      },
+      "notes": "Elapsed reaches 15 >= 12 on the third sleep, so the third poll never happens. Relying on the server's error alone leaves a client polling forever."
+    },
+    {
+      "id": "device_auth_poll_009_initial_wait",
+      "kind": "poll",
+      "description": "The first poll happens AFTER one interval, not immediately.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      },
+      "notes": "poll_delays[0] == 5 rather than 0 is the whole assertion. An eager first poll races the user, who has not yet visited the verification URI."
+    },
+    {
+      "id": "device_auth_poll_010_transport_error_retried",
+      "kind": "poll",
+      "description": "A transport failure is retried rather than terminating, still bounded by the deadline.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "transport_error": true
+          },
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 3
+      }
+    },
+    {
+      "id": "device_auth_poll_011_unknown_error_terminal",
+      "kind": "poll",
+      "description": "An unrecognised error identifier terminates as a protocol error.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "server_on_fire"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "protocol_error",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      }
+    },
+    {
+      "id": "device_auth_poll_012_malformed_body",
+      "kind": "poll",
+      "description": "A 2xx whose body carries no access_token terminates cleanly, not with a crash.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 200,
+            "body": {
+              "unexpected": "shape"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "protocol_error",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      }
+    },
+    {
+      "id": "device_auth_poll_013_token_type_normalised",
+      "kind": "poll",
+      "description": "A lowercase token_type is normalised to Bearer casing.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1,
+        "token_set": {
+          "token_type": "Bearer"
+        }
+      }
+    },
+    {
+      "id": "device_auth_poll_014_scope_split",
+      "kind": "poll",
+      "description": "A space-delimited scope string is split into a list (RFC 6749).",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600,
+              "scope": "openid api.read"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1,
+        "token_set": {
+          "scope": [
+            "openid",
+            "api.read"
+          ]
+        }
+      }
+    },
+    {
+      "id": "device_auth_poll_015_expires_at_computed",
+      "kind": "poll",
+      "description": "expires_at is wall-clock now + expires_in, an absolute instant.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1,
+        "token_set": {
+          "expires_at": 4600
+        }
+      },
+      "notes": "Harness pins wall_clock_now to 1000. A duration would be meaningless after a process restart, which is why the stored form is absolute."
+    },
+    {
+      "id": "device_auth_expiry_016_skew",
+      "kind": "expiry",
+      "description": "is_expired is true inside the 30-second default skew window.",
+      "input": {
+        "token_set": {
+          "expires_at": 1000
+        },
+        "now": 975,
+        "skew_seconds": 30
+      },
+      "expected": {
+        "is_expired": true
+      },
+      "notes": "975 + 30 = 1005 >= 1000. The token is still technically valid; the skew stops a request being dispatched with a credential that expires in flight."
+    },
+    {
+      "id": "device_auth_expiry_017_no_expiry",
+      "kind": "expiry",
+      "description": "A token with no expires_at never auto-expires.",
+      "input": {
+        "token_set": {
+          "expires_at": null
+        },
+        "now": 99999999,
+        "skew_seconds": 30
+      },
+      "expected": {
+        "is_expired": false
+      }
+    },
+    {
+      "id": "device_auth_expiry_017b_not_yet_expired",
+      "kind": "expiry",
+      "description": "Outside the skew window the token is not expired - the converse of 016.",
+      "input": {
+        "token_set": {
+          "expires_at": 1000
+        },
+        "now": 900,
+        "skew_seconds": 30
+      },
+      "expected": {
+        "is_expired": false
+      },
+      "notes": "Without this, an implementation returning True unconditionally passes 016."
+    },
+    {
+      "id": "device_auth_refresh_018_rotation",
+      "kind": "refresh",
+      "description": "A refreshed TokenSet REPLACES the stored record wholesale, including the refresh token.",
+      "input": {
+        "stored": {
+          "access_token": "old",
+          "refresh_token": "r1",
+          "expires_at": 1000,
+          "scope": [
+            "openid"
+          ]
+        },
+        "response": {
+          "status": 200,
+          "body": {
+            "access_token": "new",
+            "token_type": "Bearer",
+            "expires_in": 3600,
+            "refresh_token": "r2"
+          }
+        },
+        "now": 2000
+      },
+      "expected": {
+        "outcome": "success",
+        "stored": {
+          "access_token": "new",
+          "refresh_token": "r2",
+          "expires_at": 5600,
+          "scope": []
+        }
+      },
+      "notes": "scope becomes [] because the response omits it. Merging the new access token into the old record would keep r1 - spent and invalid under rotation."
+    },
+    {
+      "id": "device_auth_refresh_019_invalid_grant_terminal",
+      "kind": "refresh",
+      "description": "invalid_grant on refresh is terminal: clear the store, do not retry.",
+      "input": {
+        "stored": {
+          "access_token": "old",
+          "refresh_token": "r1",
+          "expires_at": 1000
+        },
+        "response": {
+          "status": 400,
+          "body": {
+            "error": "invalid_grant"
+          }
+        },
+        "now": 2000
+      },
+      "expected": {
+        "outcome": "refresh_failed",
+        "stored": null,
+        "store_cleared": true
+      }
+    },
+    {
+      "id": "device_auth_redaction_020",
+      "kind": "redaction",
+      "description": "repr / toString / Debug must contain neither the access token nor the refresh token.",
+      "input": {
+        "token_set": {
+          "access_token": "SECRET-ACCESS-VALUE",
+          "refresh_token": "SECRET-REFRESH-VALUE",
+          "token_type": "Bearer",
+          "expires_at": 1000,
+          "scope": [
+            "openid"
+          ]
+        }
+      },
+      "expected": {
+        "must_not_contain": [
+          "SECRET-ACCESS-VALUE",
+          "SECRET-REFRESH-VALUE"
+        ]
+      },
+      "notes": "Redaction is a security property, and a property nobody tests is a property that regresses. Asserted as conformance rather than left to convention."
+    },
+    {
+      "id": "device_auth_provider_021_error_alias",
+      "kind": "poll",
+      "description": "A vendor error code mapped via error_aliases dispatches as its standard equivalent.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_declined"
+            }
+          }
+        ],
+        "config": {
+          "error_aliases": {
+            "authorization_declined": "access_denied"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "access_denied",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      }
+    },
+    {
+      "id": "device_auth_provider_022_form_encoded",
+      "kind": "parse",
+      "description": "A form-urlencoded token response parses; the client must not assume JSON.",
+      "input": {
+        "content_type": "application/x-www-form-urlencoded",
+        "raw_body": "access_token=t&token_type=Bearer&expires_in=3600"
+      },
+      "expected": {
+        "parsed": {
+          "access_token": "t",
+          "token_type": "Bearer",
+          "expires_in": "3600"
+        }
+      },
+      "notes": "Some providers return form-encoded unless the request asks otherwise. The client sends Accept: application/json AND falls back to form parsing."
+    },
+    {
+      "id": "device_auth_provider_023_no_device_expiry",
+      "kind": "poll",
+      "description": "A device response without expires_in falls back to a 15-minute deadline.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_pending"
+            }
+          }
+        ],
+        "repeat_last_response": true
+      },
+      "expected": {
+        "outcome": "deadline_exceeded",
+        "final_interval": 5,
+        "polls_made": 179,
+        "poll_delays_length": 180,
+        "poll_delays_all_equal": 5
+      },
+      "notes": "900 / 5 = 180 sleeps to reach the deadline, so 179 polls happen. poll_delays is omitted here (180 identical entries); assert its length is 180 and every entry 5."
+    },
+    {
+      "id": "device_auth_provider_024_scope_separator",
+      "kind": "request",
+      "description": "A non-default scope_separator is used when encoding the device request.",
+      "input": {
+        "kind": "device",
+        "config": {
+          "client_id": "cid",
+          "scope_separator": ","
+        },
+        "params": {
+          "scope": [
+            "openid",
+            "api.read"
+          ]
+        }
+      },
+      "expected": {
+        "body_contains": {
+          "scope": "openid,api.read",
+          "client_id": "cid"
+        }
+      }
+    },
+    {
+      "id": "device_auth_provider_025_alias_cannot_invent_state",
+      "kind": "alias_validation",
+      "description": "An alias mapping onto a non-RFC identifier is rejected at construction.",
+      "input": {
+        "error_aliases": {
+          "weird": "not_a_standard_identifier"
+        }
+      },
+      "expected": {
+        "valid": false
+      },
+      "notes": "Aliases may only map ONTO the four standard identifiers. Allowing new targets would let configuration introduce states the state machine has no branch for."
+    },
+    {
+      "id": "device_auth_provider_025b_alias_onto_standard_accepted",
+      "kind": "alias_validation",
+      "description": "The converse of 025: mapping onto a standard identifier is accepted.",
+      "input": {
+        "error_aliases": {
+          "authorization_declined": "access_denied"
+        }
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "id": "device_auth_discovery_026_rfc8414_path_insertion",
+      "kind": "discovery_url",
+      "description": "RFC 8414 INSERTS the suffix between host and path for a path-bearing issuer.",
+      "input": {
+        "issuer": "https://auth.example.com/tenant1"
+      },
+      "expected": {
+        "candidates": [
+          "https://auth.example.com/.well-known/oauth-authorization-server/tenant1",
+          "https://auth.example.com/.well-known/openid-configuration/tenant1",
+          "https://auth.example.com/tenant1/.well-known/openid-configuration"
+        ]
+      },
+      "notes": "Pure URL construction, no network. The insertion-vs-append difference is invisible until a tenant- or realm-scoped issuer appears, which is what multi-tenant providers use."
+    },
+    {
+      "id": "device_auth_discovery_027_oidc_append",
+      "kind": "discovery_url",
+      "description": "OIDC Discovery 1.0 APPENDS to the issuer - candidate 3, same issuer as 026.",
+      "input": {
+        "issuer": "https://auth.example.com/tenant1"
+      },
+      "expected": {
+        "third_candidate": "https://auth.example.com/tenant1/.well-known/openid-configuration"
+      }
+    },
+    {
+      "id": "device_auth_discovery_028_bare_issuer",
+      "kind": "discovery_url",
+      "description": "For an issuer with no path the two constructions collapse to the same shape.",
+      "input": {
+        "issuer": "https://auth.example.com"
+      },
+      "expected": {
+        "candidates": [
+          "https://auth.example.com/.well-known/oauth-authorization-server",
+          "https://auth.example.com/.well-known/openid-configuration",
+          "https://auth.example.com/.well-known/openid-configuration"
+        ]
+      },
+      "notes": "Candidates 2 and 3 are identical here. That is expected and is precisely why the bug hides until case 026's shape shows up."
+    },
+    {
+      "id": "device_auth_discovery_029_explicit_overrides",
+      "kind": "discovery",
+      "description": "An explicitly configured endpoint is never replaced by a discovered one.",
+      "input": {
+        "config": {
+          "issuer": "https://auth.example.com",
+          "token_endpoint": "https://explicit.example/token"
+        },
+        "metadata": {
+          "issuer": "https://auth.example.com",
+          "device_authorization_endpoint": "https://d.example/device",
+          "token_endpoint": "https://discovered.example/token"
+        }
+      },
+      "expected": {
+        "token_endpoint": "https://explicit.example/token",
+        "device_authorization_endpoint": "https://d.example/device"
+      }
+    },
+    {
+      "id": "device_auth_discovery_030_grant_unrecognised_warns",
+      "kind": "discovery",
+      "description": "grant_types_supported matching neither form warns; the flow still proceeds.",
+      "input": {
+        "config": {
+          "issuer": "https://auth.example.com"
+        },
+        "metadata": {
+          "issuer": "https://auth.example.com",
+          "device_authorization_endpoint": "https://d.example/device",
+          "token_endpoint": "https://d.example/token",
+          "grant_types_supported": [
+            "authorization_code"
+          ]
+        }
+      },
+      "expected": {
+        "warned": true,
+        "proceeds": true
+      },
+      "notes": "Capability detection warns rather than refuses. A provider under-reporting its grants is more common than one that genuinely cannot do device flow."
+    },
+    {
+      "id": "device_auth_compat_031_status_428_pending",
+      "kind": "poll",
+      "description": "authorization_pending at HTTP 428 continues polling - dispatch is on the body.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 428,
+            "body": {
+              "error": "authorization_pending"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 2
+      },
+      "notes": "A real provider does this. A status-code-driven client treats 428 as fatal and breaks against it entirely."
+    },
+    {
+      "id": "device_auth_compat_032_status_403_slow_down",
+      "kind": "poll",
+      "description": "slow_down at HTTP 403 backs off rather than terminating.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 403,
+            "body": {
+              "error": "slow_down"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          10
+        ],
+        "final_interval": 10,
+        "polls_made": 2
+      }
+    },
+    {
+      "id": "device_auth_compat_033_status_403_denied",
+      "kind": "poll",
+      "description": "access_denied at HTTP 403 terminates as a denial, not as a protocol error.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 403,
+            "body": {
+              "error": "access_denied"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "access_denied",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      }
+    },
+    {
+      "id": "device_auth_compat_034_interval_from_body",
+      "kind": "poll",
+      "description": "An interval inside the slow_down body is authoritative and overrides the +5 default.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "slow_down",
+              "interval": 30
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          30
+        ],
+        "final_interval": 30,
+        "polls_made": 2
+      },
+      "notes": "30, not 10. The server's own number beats guessing, and costs one conditional."
+    },
+    {
+      "id": "device_auth_compat_035_verification_url_alias",
+      "kind": "parse",
+      "description": "verification_url is read as the verification address when verification_uri is absent.",
+      "input": {
+        "content_type": "application/json",
+        "raw_body": "{\"device_code\":\"d\",\"user_code\":\"AB-CD\",\"verification_url\":\"https://e.example/device\",\"expires_in\":600}",
+        "as": "device"
+      },
+      "expected": {
+        "parsed": {
+          "verification_uri": "https://e.example/device"
+        }
+      },
+      "notes": "A parser bound to the exact RFC spelling reads null here and shows the user a blank URL - a silent failure at the one step the user must act on."
+    },
+    {
+      "id": "device_auth_compat_036_error_code_field",
+      "kind": "poll",
+      "description": "An error reported in `error_code` rather than `error` dispatches correctly.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error_code": "authorization_pending"
+            }
+          },
+          {
+            "status": 200,
+            "body": {
+              "access_token": "t",
+              "token_type": "Bearer",
+              "expires_in": 3600
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "success",
+        "poll_delays": [
+          5,
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 2
+      }
+    },
+    {
+      "id": "device_auth_compat_037_unknown_fields_ignored",
+      "kind": "parse",
+      "description": "Proprietary extra fields parse without error - never reject on unknown keys.",
+      "input": {
+        "content_type": "application/json",
+        "raw_body": "{\"device_code\":\"d\",\"user_code\":\"AB-CD\",\"verification_uri\":\"https://e.example/d\",\"expires_in\":600,\"message\":\"Go to the page\",\"created_at\":123,\"x_vendor\":{\"a\":1}}",
+        "as": "device"
+      },
+      "expected": {
+        "parsed": {
+          "device_code": "d",
+          "user_code": "AB-CD",
+          "verification_uri": "https://e.example/d"
+        }
+      }
+    },
+    {
+      "id": "device_auth_compat_038_user_code_verbatim",
+      "kind": "parse",
+      "description": "user_code reaches the consumer byte-for-byte: no upper-casing, stripping, or re-grouping.",
+      "input": {
+        "content_type": "application/json",
+        "raw_body": "{\"device_code\":\"d\",\"user_code\":\"wdjb-mjht\",\"verification_uri\":\"https://e.example/d\",\"expires_in\":600}",
+        "as": "device"
+      },
+      "expected": {
+        "parsed": {
+          "user_code": "wdjb-mjht"
+        }
+      },
+      "notes": "Lowercase with a hyphen. Some providers are case-sensitive and at least one embeds the code unmodified into a URL query parameter. Presentation is the consumer's business, and even there it must stay enterable as given."
+    },
+    {
+      "id": "device_auth_compat_039_alias_declined",
+      "kind": "poll",
+      "description": "authorization_declined aliased to access_denied terminates as a denial.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "authorization_declined"
+            }
+          }
+        ],
+        "config": {
+          "error_aliases": {
+            "authorization_declined": "access_denied"
+          }
+        }
+      },
+      "expected": {
+        "outcome": "access_denied",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      }
+    },
+    {
+      "id": "device_auth_compat_040_invalid_grant_not_aliased_by_default",
+      "kind": "poll",
+      "description": "Without an explicit alias, invalid_grant is a protocol error - NOT silent expiry.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "ABCD-EFGH",
+          "verification_uri": "https://e.example/device",
+          "expires_in": 600,
+          "interval": 5
+        },
+        "token_responses": [
+          {
+            "status": 400,
+            "body": {
+              "error": "invalid_grant"
+            }
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "protocol_error",
+        "poll_delays": [
+          5
+        ],
+        "final_interval": 5,
+        "polls_made": 1
+      },
+      "notes": "The over-correction guard. Normalisation makes the client permissive; this asserts permissiveness stops short of masking a malformed or already-redeemed code as benign expiry."
+    },
+    {
+      "id": "device_auth_discovery_041_bare_device_code_grant",
+      "kind": "discovery",
+      "description": "grant_types_supported: [\"device_code\"] is accepted as supported.",
+      "input": {
+        "config": {
+          "issuer": "https://a.example"
+        },
+        "metadata": {
+          "issuer": "https://a.example",
+          "device_authorization_endpoint": "https://a.example/d",
+          "token_endpoint": "https://a.example/t",
+          "grant_types_supported": [
+            "device_code"
+          ]
+        }
+      },
+      "expected": {
+        "warned": false,
+        "proceeds": true
+      },
+      "notes": "The full URN is urn:ietf:params:oauth:grant-type:device_code; a provider advertising the short form still supports it."
+    },
+    {
+      "id": "device_auth_discovery_042_no_grant_types_field",
+      "kind": "discovery",
+      "description": "An absent grant_types_supported is treated as supported, not unsupported.",
+      "input": {
+        "config": {
+          "issuer": "https://a.example"
+        },
+        "metadata": {
+          "issuer": "https://a.example",
+          "device_authorization_endpoint": "https://a.example/d",
+          "token_endpoint": "https://a.example/t"
+        }
+      },
+      "expected": {
+        "warned": false,
+        "proceeds": true
+      }
+    },
+    {
+      "id": "device_auth_hook_043_transform_request",
+      "kind": "hook",
+      "description": "Params and headers returned by transform_request reach the outbound request.",
+      "input": {
+        "hook": "transform_request",
+        "returns": {
+          "params": {
+            "audience": "https://api.example"
+          },
+          "headers": {
+            "X-Vendor": "1"
+          }
+        }
+      },
+      "expected": {
+        "body_contains": {
+          "audience": "https://api.example"
+        },
+        "headers_contain": {
+          "X-Vendor": "1"
+        }
+      }
+    },
+    {
+      "id": "device_auth_hook_044_parse_response_none_falls_back",
+      "kind": "hook",
+      "description": "parse_response returning None uses the built-in parser rather than failing.",
+      "input": {
+        "hook": "parse_response",
+        "returns": null,
+        "content_type": "application/json",
+        "raw_body": "{\"access_token\":\"t\",\"token_type\":\"Bearer\"}"
+      },
+      "expected": {
+        "parsed": {
+          "access_token": "t"
+        }
+      }
+    },
+    {
+      "id": "device_auth_hook_045_classify_error_invalid_return",
+      "kind": "hook",
+      "description": "classify_error returning a value outside the four identifiers is rejected LOUDLY.",
+      "input": {
+        "hook": "classify_error",
+        "returns": "something_else",
+        "body": {
+          "error": "totally_unrecognised_vendor_code"
+        }
+      },
+      "expected": {
+        "raises": true
+      },
+      "notes": "The body carries a NON-STANDARD identifier on purpose. Without it a harness invents one, and an invented standard identifier resolves before the hook is reached - so the hook never runs and the case passes without asserting anything. Never coerced, never defaulted, never passed through to dispatch."
+    },
+    {
+      "id": "device_auth_hook_046_classify_error_none_falls_back",
+      "kind": "hook",
+      "description": "classify_error returning None falls through to default classification.",
+      "input": {
+        "hook": "classify_error",
+        "returns": null,
+        "body": {
+          "error": "totally_unrecognised_vendor_code"
+        }
+      },
+      "expected": {
+        "identifier": null,
+        "outcome": "protocol_error"
+      },
+      "notes": "Previously used `access_denied`, which resolves through normal classification and therefore never consults the hook - the case passed whatever the hook did. An unresolved identifier plus a hook returning None must fall through to the default outcome, which is a protocol error."
+    },
+    {
+      "id": "device_auth_hook_047_hook_order",
+      "kind": "hook",
+      "description": "Fixed order: error_aliases, then classify_error, then dispatch.",
+      "input": {
+        "body": {
+          "error": "vendor_denied"
+        },
+        "config": {
+          "error_aliases": {
+            "vendor_denied": "access_denied"
+          }
+        },
+        "hook": "classify_error",
+        "returns": "expired_token"
+      },
+      "expected": {
+        "identifier": "access_denied"
+      },
+      "notes": "The alias wins because it resolves to a standard identifier before the hook is consulted. If the hook ran first the outcome would be expired_token, and the two are not interchangeable - one is the user refusing, the other a timeout."
+    },
+    {
+      "id": "device_auth_hook_048_no_hooks_matches_baseline",
+      "kind": "hook",
+      "description": "With no hooks installed, output is identical to the corresponding hook-free case.",
+      "input": {
+        "hooks": {},
+        "baseline_case": "device_auth_poll_004_slow_down"
+      },
+      "expected": {
+        "identical_to_baseline": true
+      }
+    },
+    {
+      "id": "device_auth_clientauth_049_basic_both_endpoints",
+      "kind": "request",
+      "description": "client_secret_basic produces a Basic header on BOTH the device and token requests.",
+      "input": {
+        "kinds": [
+          "device",
+          "token"
+        ],
+        "config": {
+          "client_id": "cid",
+          "client_secret": "sec",
+          "client_auth_method": "client_secret_basic"
+        },
+        "params": {}
+      },
+      "expected": {
+        "headers_contain": {
+          "Authorization": "Basic Y2lkOnNlYw=="
+        },
+        "body_contains": {
+          "client_id": "cid"
+        },
+        "body_excludes": [
+          "client_secret"
+        ]
+      },
+      "notes": "Both endpoints is the easy half to miss. A provider can reject an unauthenticated /device/authorize with invalid_client, long before any token request happens. Y2lkOnNlYw== is base64 of 'cid:sec'."
+    },
+    {
+      "id": "device_auth_clientauth_050_none_sends_no_secret",
+      "kind": "request",
+      "description": "The default `none` sends client_id only, with no secret anywhere.",
+      "input": {
+        "kinds": [
+          "device",
+          "token"
+        ],
+        "config": {
+          "client_id": "cid",
+          "client_auth_method": "none"
+        },
+        "params": {}
+      },
+      "expected": {
+        "body_contains": {
+          "client_id": "cid"
+        },
+        "body_excludes": [
+          "client_secret"
+        ],
+        "headers_exclude": [
+          "Authorization"
+        ]
+      }
+    },
+    {
+      "id": "device_auth_parse_051_unknown_envelope_soft_fail",
+      "kind": "parse",
+      "description": "An error body matching no known envelope yields a protocol error CARRYING the raw body.",
+      "input": {
+        "content_type": "application/json",
+        "status": 400,
+        "raw_body": "{\"errorCode\":\"E01\",\"errorSummary\":\"nope\",\"errorId\":\"x\"}",
+        "as": "error"
+      },
+      "expected": {
+        "outcome": "protocol_error",
+        "raw_body_preserved": true
+      },
+      "notes": "Fail soft on shape. One surveyed provider returns some errors in the OAuth envelope and others, on the same endpoint, in a proprietary one. Crashing on a missing key loses the only diagnostic the operator has."
+    },
+    {
+      "id": "device_auth_encoding_052_json_refresh",
+      "kind": "request",
+      "description": "request_encoding['refresh'] = 'json' sends JSON while the token request stays form.",
+      "input": {
+        "kinds": [
+          "token",
+          "refresh"
+        ],
+        "config": {
+          "client_id": "cid",
+          "request_encoding": {
+            "refresh": "json"
+          }
+        },
+        "params": {}
+      },
+      "expected": {
+        "encoding_by_kind": {
+          "token": "form",
+          "refresh": "json"
+        }
+      },
+      "notes": "One vendor's single token endpoint takes form for the code exchange and JSON for refresh. Per-kind, not a global 'uses JSON' flag, or that combination is inexpressible."
+    },
+    {
+      "id": "device_auth_discovery_053_html_200_falls_through",
+      "kind": "discovery",
+      "description": "A 200 serving HTML at a well-known path is NOT accepted; the next candidate is tried.",
+      "input": {
+        "config": {
+          "issuer": "https://a.example"
+        },
+        "responses": [
+          {
+            "status": 200,
+            "content_type": "text/html",
+            "raw_body": "<!doctype html><html>"
+          },
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "raw_body": "{\"issuer\":\"https://a.example\",\"device_authorization_endpoint\":\"https://a.example/d\",\"token_endpoint\":\"https://a.example/t\"}"
+          }
+        ]
+      },
+      "expected": {
+        "candidate_used": 2,
+        "token_endpoint": "https://a.example/t"
+      },
+      "notes": "A real provider serves an SPA at one well-known path. Advancing on status alone accepts it, fails while parsing, and never tries the remaining candidates."
+    },
+    {
+      "id": "device_auth_discovery_054_issuer_mismatch_rejected",
+      "kind": "discovery",
+      "description": "Metadata whose issuer differs from the one used to build the URL is rejected.",
+      "input": {
+        "config": {
+          "issuer": "https://a.example"
+        },
+        "responses": [
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "raw_body": "{\"issuer\":\"https://evil.example\",\"token_endpoint\":\"https://evil.example/t\",\"device_authorization_endpoint\":\"https://evil.example/d\"}"
+          }
+        ]
+      },
+      "expected": {
+        "accepted": false
+      },
+      "notes": "The metadata is otherwise COMPLETE on purpose. Both cases previously omitted device_authorization_endpoint, so discover() threw whether or not the issuer check fired - and an implementation that normalises the issuer before comparing passed. Verified by mutation in the TypeScript SDK. Assert the rejection itself, not merely that discovery failed."
+    },
+    {
+      "id": "device_auth_discovery_055_issuer_compared_verbatim",
+      "kind": "discovery",
+      "description": "Issuers differing only by trailing slash or case are DIFFERENT, not normalised equal.",
+      "input": {
+        "config": {
+          "issuer": "https://a.example"
+        },
+        "responses": [
+          {
+            "status": 200,
+            "content_type": "application/json",
+            "raw_body": "{\"issuer\":\"https://A.example/\",\"token_endpoint\":\"https://a.example/t\",\"device_authorization_endpoint\":\"https://a.example/d\"}"
+          }
+        ]
+      },
+      "expected": {
+        "accepted": false
+      },
+      "notes": "The metadata is otherwise COMPLETE on purpose. Both cases previously omitted device_authorization_endpoint, so discover() threw whether or not the issuer check fired - and an implementation that normalises the issuer before comparing passed. Verified by mutation in the TypeScript SDK. Assert the rejection itself, not merely that discovery failed."
+    },
+    {
+      "id": "device_auth_discovery_056_http_endpoint_refused",
+      "kind": "discovery",
+      "description": "A discovered endpoint on plain http:// is REFUSED. This is the hard half of the endpoint rule; case 057 is the soft half.",
+      "input": {
+        "config": {
+          "issuer": "https://a.example"
+        },
+        "metadata": {
+          "issuer": "https://a.example",
+          "device_authorization_endpoint": "http://a.example/d",
+          "token_endpoint": "https://a.example/t"
+        }
+      },
+      "expected": {
+        "accepted": false,
+        "reason": "insecure_endpoint"
+      }
+    },
+    {
+      "id": "device_auth_discovery_057_cross_origin_endpoint_warned_not_refused",
+      "kind": "discovery",
+      "description": "A discovered https:// endpoint on a DIFFERENT origin than the issuer is warned about and then FOLLOWED. Pins the 2026-09-08 amendment: the spec previously said such an endpoint was rejected, which contradicted case 029 and breaks real providers that host the token endpoint on a separate host.",
+      "input": {
+        "config": {
+          "issuer": "https://a.example"
+        },
+        "metadata": {
+          "issuer": "https://a.example",
+          "device_authorization_endpoint": "https://d.other-host.example/d",
+          "token_endpoint": "https://a.example/t"
+        }
+      },
+      "expected": {
+        "accepted": true,
+        "warned": true,
+        "device_authorization_endpoint": "https://d.other-host.example/d"
+      }
+    },
+    {
+      "id": "device_auth_clientauth_058_basic_urlencodes_before_base64",
+      "kind": "request",
+      "description": "RFC 6749 §2.3.1: the client id and secret are form-urlencoded BEFORE base64. Asserted as the round trip a server performs - base64-decode, split on the first ':', form-decode - because that is the property that matters. Raw concatenation fails it: the secret's '+' decodes to a space and the server sees a different secret.",
+      "input": {
+        "kinds": [
+          "token"
+        ],
+        "config": {
+          "client_id": "cid",
+          "client_secret": "s p+a:ce",
+          "client_auth_method": "client_secret_basic"
+        },
+        "params": {}
+      },
+      "expected": {
+        "basic_credentials_roundtrip": {
+          "client_id": "cid",
+          "client_secret": "s p+a:ce"
+        }
+      },
+      "notes": "Deliberately NOT an exact-bytes assertion. Python's quote_plus, JavaScript's URLSearchParams and encodeURIComponent, and Rust's form encoders disagree on how space, '*' and '~' are spelled - and all of those spellings decode identically, so a server cannot tell them apart. Pinning one spelling would force two SDKs to hand-roll an encoder for zero functional gain. What must not vary is that encoding happens at all. With Python's quote_plus the header reads 'Basic Y2lkOnMrcCUyQmElM0FjZQ==' - an example, not the contract."
+    },
+    {
+      "id": "device_auth_refresh_059_aliases_do_not_apply_on_refresh",
+      "kind": "refresh",
+      "description": "error_aliases does NOT apply on the refresh path. A consumer who opted into invalid_grant -> expired_token for the device-code path must still get the terminal store-clearing behaviour when refresh fails with invalid_grant.",
+      "input": {
+        "stored": {
+          "access_token": "old",
+          "refresh_token": "r1",
+          "expires_at": 1000
+        },
+        "config": {
+          "error_aliases": {
+            "invalid_grant": "expired_token"
+          }
+        },
+        "response": {
+          "status": 400,
+          "body": {
+            "error": "invalid_grant"
+          }
+        },
+        "now": 2000
+      },
+      "expected": {
+        "outcome": "refresh_failed",
+        "stored": null,
+        "store_cleared": true
+      },
+      "notes": "Without this rule the one alias the spec explicitly describes would disable the one terminal rule that protects the store - the refresh path would see expired_token, treat it as non-terminal, and leave a spent refresh token on disk."
+    },
+    {
+      "id": "device_auth_callback_060_on_user_code_receives_effective_expiry",
+      "kind": "callback",
+      "description": "When the device response omits expires_in, on_user_code receives the EFFECTIVE deadline (900), never null. A consumer rendering a countdown must be told when the client will actually give up; passing null forces every consumer to reimplement the 900 fallback, which is exactly the per-CLI duplication this proposal exists to remove.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "AB-CD",
+          "verification_uri": "https://e.example/d"
+        }
+      },
+      "expected": {
+        "on_user_code": {
+          "verification_uri": "https://e.example/d",
+          "user_code": "AB-CD",
+          "verification_uri_complete": null,
+          "expires_in": 900
+        }
+      },
+      "notes": "Found as a live three-way divergence after the first implementations landed: Python applied the fallback at parse time and passed 900, while Rust and TypeScript both passed the raw wire value. Nothing in the corpus covered it."
+    },
+    {
+      "id": "device_auth_callback_060b_on_user_code_passes_server_expiry_through",
+      "kind": "callback",
+      "description": "The converse of 060: when the server DOES send expires_in, that value is passed unchanged.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "AB-CD",
+          "verification_uri": "https://e.example/d",
+          "verification_uri_complete": "https://e.example/d?c=AB-CD",
+          "expires_in": 600
+        }
+      },
+      "expected": {
+        "on_user_code": {
+          "verification_uri": "https://e.example/d",
+          "user_code": "AB-CD",
+          "verification_uri_complete": "https://e.example/d?c=AB-CD",
+          "expires_in": 600
+        }
+      }
+    },
+    {
+      "id": "device_auth_encoding_061_form_encoding_reserved_characters",
+      "kind": "request",
+      "description": "A form-encoded body must be a conforming application/x-www-form-urlencoded serialization: form-decoding it returns every parameter unchanged, including values containing a space, '+', '*' and '~'.",
+      "input": {
+        "kind": "token",
+        "config": {
+          "client_id": "cid"
+        },
+        "params": {
+          "probe": "a b+c*d~e",
+          "scope_like": "openid api.read",
+          "plus_only": "a+b"
+        }
+      },
+      "expected": {
+        "form_body_roundtrip": {
+          "probe": "a b+c*d~e",
+          "scope_like": "openid api.read",
+          "plus_only": "a+b",
+          "client_id": "cid"
+        }
+      },
+      "notes": "The three languages' default helpers produce three different byte strings here - quote_plus gives 'a+b%2Bc%2Ad~e', URLSearchParams 'a+b%2Bc*d%7Ee', encodeURIComponent 'a%20b%2Bc*d~e' - and all three decode back to the same value. The corpus therefore pins the round trip, not the bytes. This follows the repository's own ownership rule: byte-equivalence is for formats two consumers must compare, and the consumer here is a third-party OAuth server that decodes. 'plus_only' is the case that catches no-encoding-at-all: 'a+b' left raw decodes to 'a b'."
+    },
+    {
+      "id": "device_auth_callback_060c_on_user_code_reports_the_clamped_deadline",
+      "kind": "callback",
+      "description": "When a caller-supplied timeout_seconds is SHORTER than the server's expires_in, on_user_code reports the timeout - the deadline actually in force - not the server's larger number.",
+      "input": {
+        "device_response": {
+          "device_code": "dc",
+          "user_code": "AB-CD",
+          "verification_uri": "https://e.example/d",
+          "expires_in": 600
+        },
+        "timeout_seconds": 7
+      },
+      "expected": {
+        "on_user_code": {
+          "verification_uri": "https://e.example/d",
+          "user_code": "AB-CD",
+          "verification_uri_complete": null,
+          "expires_in": 7
+        }
+      },
+      "notes": "The spec already says of timeout_seconds: 'when both apply, the shorter wins'. All three SDKs applied that to the DEADLINE and then reported the unclamped server value to the callback, so a consumer rendering 'expires in 600s' watched the flow die at 7. No divergence between the SDKs - they were consistently inconsistent with the contract. Reporting one number, the one the loop actually uses, is the only reading under which case 060's own justification holds."
+    }
+  ]
+}

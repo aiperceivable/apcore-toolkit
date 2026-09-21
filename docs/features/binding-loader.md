@@ -27,7 +27,7 @@ Unlike `apcore.BindingLoader` (which `import_module`s the `target` and registers
 
 | Method | Description |
 |--------|-------------|
-| `load(path, *, strict=False, recursive=False)` | Load a single `.binding.yaml` file or every `*.binding.yaml` in a directory. All three SDKs: pass `recursive=True` / `{ recursive: true }` to descend into subdirectories for `**/*.binding.yaml`. |
+| `load(path, *, strict=False, recursive=False, pattern="*.binding.yaml")` | Load a single binding file, or every file in a directory whose **name** matches `pattern`. Pass `recursive=True` (Python) / a `true` third argument (TypeScript) / `recursive: true` (Rust) to descend into subdirectories; `pattern` still matches file names only, at every depth. See [Pattern Matching](#pattern-matching). |
 | `load_data(data, *, strict=False)` | Load pre-parsed YAML data (a `{"bindings": [...]}` dict). |
 
 Both return `list[ScannedModule]` (or `ScannedModule[]` / `Vec<ScannedModule>`).
@@ -55,6 +55,244 @@ When a non-required field (`input_schema`, `output_schema`, `tags`) is present b
 The loose-mode behaviour is intentional: callers running with `strict=False` have explicitly opted into permissive parsing, and a single wrong-type optional field should not abort scanning of an otherwise valid binding file.
 
 Required fields (`module_id`, `target`) are always validated and reject wrong-type or empty-string values regardless of mode.
+
+## Pattern Matching
+
+*Added in 0.12.0. Tracking issue: [aiperceivable/apcore-toolkit#18](https://github.com/aiperceivable/apcore-toolkit/issues/18).*
+
+apcore 0.30 made `bindings.pattern` a canonical configuration key
+(`schemas/defaults.schema.json`, default `"*.binding.yaml"`). Before 0.12.0 the
+toolkit loader hardcoded that default and had no parameter through which a
+caller could honour a configured value, so any consumer that needs the
+loader's **return value** — rather than apcore's registration side effect —
+silently ignored the key.
+
+`load` now takes the resolved pattern as an argument.
+
+### The loader takes a value; it does not read `Config`
+
+This is deliberate and is the whole reason a parameter was chosen over
+config-awareness. `BindingLoader` is the *pure-data* half of the ecosystem's
+binding story: it does not import `target`, does not touch a `Registry`, and
+does not depend on `apcore.Config`. Resolution — the environment > file >
+default precedence chain of PROTOCOL_SPEC §9.2 — belongs to the caller, which
+is the layer that actually holds a `Config`.
+
+```python
+# The caller resolves; the loader matches.
+pattern = config.get("bindings.pattern") or "*.binding.yaml"
+modules = loader.load(bindings_dir, pattern=pattern)
+```
+
+This mirrors `apcore`'s own `load_binding_dir_with_config(dir, pattern, config)`,
+which likewise accepts an explicit `pattern` that outranks the configured one.
+
+### Supported syntax
+
+`pattern` is matched against the **file name only** — never a directory
+component, never the full path. Two metacharacters are recognised:
+
+| Token | Meaning |
+|---|---|
+| `*` | Zero or more characters, including `.` |
+| `?` | Exactly one character |
+| anything else | A literal, including `[`, `]`, `{`, `}`, `!`, `^`, `-` |
+
+Everything about this matcher is fixed across the three SDKs and asserted by
+[`conformance/fixtures/binding_pattern.json`](../reference/conformance.md).
+
+- **Character classes are not supported.** `[ab].binding.yaml` matches a file
+  literally named `[ab].binding.yaml`, nothing else. POSIX classes, ranges, and
+  the two incompatible negation spellings (`[!x]` vs `[^x]`) are excluded
+  precisely because they are where language glob implementations diverge.
+- **Brace expansion is not supported.** `{a,b}.yaml` is a literal.
+- **Matching is case-sensitive on every platform**, including macOS and
+  Windows. The matcher never case-folds. (A case-insensitive *filesystem* can
+  still hand the loader a name whose case differs from what was written on
+  disk; that is the OS's behaviour, not the matcher's.)
+- **Leading-dot files are matched normally.** `*.binding.yaml` matches
+  `.hidden.binding.yaml`. Shell globs traditionally exclude dotfiles; this
+  matcher does not, which preserves the pre-0.12.0 behaviour of all three SDKs.
+
+### Normative matching algorithm
+
+Three independent implementations converge only if the algorithm is specified,
+not just the syntax. Implement exactly this — the standard two-pointer glob
+match with single-star backtracking:
+
+```text
+match(pattern, name):
+    p = 0; n = 0                  # cursors into pattern and name
+    star = -1; mark = 0           # last '*' seen, and where to resume the name
+
+    while n < len(name):
+        if p < len(pattern) and pattern[p] == '?':
+            p += 1; n += 1
+        elif p < len(pattern) and pattern[p] == '*':
+            star = p; mark = n; p += 1        # consume zero chars for now
+        elif p < len(pattern) and pattern[p] == name[n]:
+            p += 1; n += 1
+        elif star >= 0:
+            p = star + 1; mark += 1; n = mark  # let the last '*' eat one more
+        else:
+            return false
+
+    while p < len(pattern) and pattern[p] == '*':
+        p += 1                    # trailing stars may match nothing
+
+    return p == len(pattern)
+```
+
+Three properties this pins down, each of which a hand-rolled matcher gets wrong
+in a different language:
+
+- **Bounded time — no exponential blowup.** Backtracking resumes only from the
+  most recent `*`, giving O(len(pattern) × len(name)) worst case. The obvious
+  recursive "try every split point" matcher is *exponential* on inputs like
+  `*a*a*a*a*b` against a long run of `a`s, and `pattern` arrives from
+  configuration, which is not always held to the same trust level as code.
+- **Comparison is over Unicode code points, not bytes or UTF-16 units.**
+  Rust iterates `char`s, Python iterates `str`. **TypeScript must not index the
+  string directly** — `"…"[i]` yields UTF-16 code units, so a single astral
+  character would be consumed by two `?`s. Convert once with `Array.from(name)`
+  / `[...name]` and index the resulting array.
+- **No normalization, no case folding.** Code points are compared for equality
+  as-is. Two names that are canonically equivalent but differently composed
+  (NFC vs NFD — routine on macOS) are **not** equal here. The matcher does not
+  apply Unicode normalization, and neither should the caller silently: a name
+  comes from the filesystem in whatever form the filesystem stores it.
+
+### Rejected patterns
+
+Validated **before** any filesystem access, so an invalid pattern is a
+diagnostic rather than a silently empty result:
+
+| Pattern | Outcome |
+|---|---|
+| `""` (empty) | `BindingLoadError` — `pattern must not be empty` |
+| Contains `/` or `\` | `BindingLoadError` — `pattern matches file names only; use recursive=True to descend into subdirectories` |
+
+The second rule is what makes `**/*.binding.yaml` an error rather than a
+mystery. It is the shape a caller reaches for first, and it is wrong here:
+depth is `recursive`'s job.
+
+**Message wording is idiomatic per SDK; the *identifier* is not.** The
+conformance corpus asserts the stable identifiers `empty_pattern` and
+`path_separator`, so each SDK maps its own error to one of those two and is
+otherwise free to phrase the human-readable reason naturally. Rust carries them
+as a dedicated `BindingLoadError::InvalidPattern { pattern, reason }` variant
+rather than overloading an existing one; Python and TypeScript raise/throw the
+existing `BindingLoadError` with the reason set.
+
+The identifiers are **corpus vocabulary, not public API.** Each SDK's
+conformance harness maps its own reason text onto them; no caller can read
+`empty_pattern` off a thrown error. That is a deliberate scope limit, not an
+oversight — Python and TypeScript expose a single `BindingLoadError` with no
+machine-readable discriminator for *any* failure kind, so giving `pattern`
+errors one alone would be an inconsistent half-measure, and giving every error
+kind one is its own change. Rust callers can already discriminate by matching
+`InvalidPattern`. A cross-SDK error-code field is worth its own issue.
+
+### Composition with `recursive`
+
+The two parameters are orthogonal, and this is the answer to the question
+issue #18 left open:
+
+| Parameter | Governs |
+|---|---|
+| `recursive` | **Which directories are traversed** — the immediate directory, or the whole tree |
+| `pattern` | **Which file names match**, at whatever depth traversal reached |
+
+The caller never writes a `**/` prefix, and the loader never synthesises one.
+`load(dir, recursive=True, pattern="*.binding.yaml")` matches
+`dir/a.binding.yaml` and `dir/nested/deep/b.binding.yaml` alike.
+
+Before 0.12.0 Python composed `"**/" + pattern` internally while Rust and
+TypeScript suffix-matched against a flat traversal. Threading a caller-supplied
+pattern through those two shapes unchanged would have produced three different
+answers for `recursive=True`; specifying `pattern` as a name matcher removes
+the composition question entirely.
+
+### Ignored for single files — but still validated
+
+When `path` names a file, `pattern` is ignored for **matching**. A caller that
+explicitly names one file has already made the selection; the loader does not
+second-guess it, and `load("odd-name.yaml")` still works.
+
+**Validation is not part of what gets ignored.** It runs first, as a pure
+precondition on the argument, before the file/directory check and before any
+`stat`. So `load("one.binding.yaml", pattern="**/*.yaml")` raises, and an
+invalid pattern also outranks a non-existent path. The two rules read as
+contradictory otherwise — you cannot know a path is a file without touching the
+filesystem — and this ordering is the resolution: *"ignored for single files"*
+governs matching only.
+
+The reason to prefer this over silently ignoring a malformed pattern: a bad
+argument is a bad argument regardless of what else was passed, and the
+alternative makes the same call raise or not depending on filesystem state.
+
+### Directories are never candidates
+
+A directory whose *name* matches the pattern is skipped, at every depth, in
+both the recursive and non-recursive branches. It is not selected and then
+failed on at read time.
+
+This is easy to get wrong in exactly the way that produces a three-way
+divergence: `Path.glob` and a bare `readdir` both yield directories, so an
+implementation that filters on name alone will hand a directory to its YAML
+reader — one SDK surfacing `EISDIR`, another an empty list, a third a parse
+error. Guard on file type during traversal.
+
+**Test the target, not the link.** The file-type check follows symlinks: a
+symlink whose name matches and whose target is a regular file **is** selected.
+Do not implement the guard with a non-following check — Rust's
+`DirEntry::file_type()` and Node's `Dirent.isFile()` both report on the link
+itself, so a guard built on either silently drops every symlinked binding file.
+That is a data-loss-shaped regression with no error, and all three SDKs
+included symlinked files before the guard existed. Use a following stat
+(`Path::is_file`, `fs.statSync(...).isFile()`, `Path.is_file()`); a broken
+symlink fails the stat and is skipped like any non-file.
+
+**Following file symlinks is not following directory symlinks.** Traversal
+still does not descend into a symlinked directory — that is where cycles and
+tree-escape live, and the existing `walkdir(follow_links(false))` policy stays.
+A symlink to a directory is therefore neither selected nor traversed. Cases 040
+and 041 pin both halves.
+
+### Ordering and caps are unchanged
+
+Matched files are still sorted lexicographically by path before parsing, the
+directory load is still all-or-nothing, and the safety caps still apply to the
+matched set (see [Safety Caps](#safety-caps-rust-only)). `pattern` narrows
+*which* files are read; it changes nothing about how they are read.
+
+**Sort by code point, case-sensitively, on every platform.** Fixture case 035
+pins this deliberately. Rust's `PathBuf` ordering and JavaScript's default
+string sort are already code-point order everywhere. Python's `sorted()` over
+`Path` objects is **not** — it compares `_str_normcase`, which case-folds on
+Windows, so `["M.binding.yaml", "a.binding.yaml"]` would come back reversed
+there. Python must sort with an explicit `key=str`. This is a pre-existing
+cross-platform divergence that `pattern` did not introduce and that case 035
+surfaces; sorting by the path string costs nothing on POSIX and removes it.
+
+### Upstream note: apcore's own three SDKs disagree here
+
+Worth recording, because a reader will reasonably ask why the toolkit does not
+simply copy apcore's matcher. As of apcore 0.30, apcore's three
+`load_binding_dir` implementations interpret `bindings.pattern` three different
+ways:
+
+| SDK | Implementation | `data*.yaml` vs `data1.yaml` |
+|---|---|---|
+| Python | `Path.glob(pattern)` — full glob, character classes included | matches |
+| Rust | `pattern.strip_prefix('*')` then `ends_with(suffix)` | no match |
+| TypeScript | `pattern.replace('*', '')` then `endsWith(suffix)` | no match |
+
+All three agree on the default `*.binding.yaml` and on nothing else — the same
+latent-divergence shape issue #18 filed against the toolkit, one layer up. The
+toolkit therefore specifies its own matcher and pins it with a fixture rather
+than inheriting an accident. This is filed upstream separately; the toolkit
+does not wait on it.
 
 ## Field Mapping
 
@@ -96,7 +334,7 @@ The top-level `spec_version` field is advisory:
 
 The error carries `file_path`/`module_id`/`missing_fields` plus a human-readable `reason` in Python; TypeScript exposes the same data as camelCase fields `filePath`/`moduleId`/`missingFields`/`reason` on `BindingLoadError extends Error`.
 
-In Rust the error is an enum (`thiserror`-derived) with 7 variants — `PathNotFound`, `FileRead`, `YamlParse`, `MissingFields`, `InvalidStructure`, `FileTooLarge`, `TooManyFiles` — carrying per-variant payloads; callers pattern-match to recover structured information. The final two variants are safety caps introduced in 0.5.0 (see [Safety Caps](#safety-caps-rust-only) below).
+In Rust the error is an enum (`thiserror`-derived) with 8 variants — `PathNotFound`, `FileRead`, `YamlParse`, `MissingFields`, `InvalidStructure`, `FileTooLarge`, `TooManyFiles`, `InvalidPattern` — carrying per-variant payloads; callers pattern-match to recover structured information. `FileTooLarge` and `TooManyFiles` are safety caps introduced in 0.5.0 (see [Safety Caps](#safety-caps-rust-only) below); `InvalidPattern { pattern, reason }` arrived with [Pattern Matching](#pattern-matching) in 0.12.0.
 
 ## Safety Caps (Rust only)
 
@@ -121,6 +359,13 @@ Python and TypeScript loaders do not currently enforce these caps. Callers in th
     # Load a directory
     modules = loader.load("./bindings")
 
+    # Honour a configured bindings.pattern — the caller resolves, the loader matches
+    modules = loader.load(
+        "./bindings",
+        recursive=True,
+        pattern=config.get("bindings.pattern") or "*.binding.yaml",
+    )
+
     # Load a single file in strict mode
     try:
         modules = loader.load("users.binding.yaml", strict=True)
@@ -144,9 +389,12 @@ Python and TypeScript loaders do not currently enforce these caps. Callers in th
     // Load a directory
     const modules = loader.load("./bindings");
 
+    // Honour a configured bindings.pattern
+    const configured = loader.load("./bindings", false, true, "*.binding.yaml");
+
     // Strict mode
     try {
-      const strictModules = loader.load("users.binding.yaml", { strict: true });
+      const strictModules = loader.load("users.binding.yaml", true);
     } catch (exc) {
       if (exc instanceof BindingLoadError) console.log(exc.missingFields);
     }
@@ -165,9 +413,17 @@ Python and TypeScript loaders do not currently enforce these caps. Callers in th
     use std::path::Path;
 
     let loader = BindingLoader::new();
-    let modules = loader.load(Path::new("./bindings"), false)?;
+    let modules = loader.load(Path::new("./bindings"), false, false)?;
 
-    match loader.load(Path::new("users.binding.yaml"), true) {
+    // Honour a configured bindings.pattern
+    let configured = loader.load_with_pattern(
+        Path::new("./bindings"),
+        false,
+        true,
+        Some("*.binding.yaml"),
+    )?;
+
+    match loader.load(Path::new("users.binding.yaml"), true, false) {
         Ok(mods) => { /* ... */ }
         Err(BindingLoadError::MissingFields { missing_fields, .. }) => {
             println!("{missing_fields:?}");
@@ -218,7 +474,7 @@ N/A — exception classes are not called and do not return values.
 |-----|------|-------|
 | Python | `class BindingLoadError(Exception)` | Single class with all 4 fields as attributes |
 | TypeScript | `class BindingLoadError extends Error` | Same 4 fields as camelCase properties |
-| Rust | `enum BindingLoadError` (`thiserror`) | 7 variants: `PathNotFound { path }`, `FileRead { path, source }`, `YamlParse { path, source }`, `MissingFields { path: Option<String>, module_id: Option<String>, missing_fields: Vec<String> }`, `InvalidStructure { path: Option<String>, reason: String }`, `FileTooLarge { path, size, max }`, `TooManyFiles { path, max }` |
+| Rust | `enum BindingLoadError` (`thiserror`) | 8 variants: `PathNotFound { path }`, `FileRead { path, source }`, `YamlParse { path, source }`, `MissingFields { path: Option<String>, module_id: Option<String>, missing_fields: Vec<String> }`, `InvalidStructure { path: Option<String>, reason: String }`, `FileTooLarge { path, size, max }`, `TooManyFiles { path, max }`, `InvalidPattern { pattern: String, reason: String }` |
 
 Rust callers pattern-match on the variant to recover structured information. Python/TypeScript callers access fields directly.
 
@@ -237,10 +493,20 @@ Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — 
 ### Inputs
 - `path`: string or Path, required — path to a `.binding.yaml` file OR a directory containing `.binding.yaml` files
 - `strict`: bool, optional, default=false — if true, raises on any malformed binding entry
-- `recursive`: bool / `{ recursive?: boolean }`, optional, default=false — when `true`, all three SDKs walk subdirectories recursively for `*.binding.yaml` files (Python via `rglob`, TypeScript via `_collectRecursive`, Rust via `walkdir::WalkDir`).
+- `recursive`: bool, optional, default=false — a positional boolean in TypeScript, **not** a `BindingLoadOptions` object (that type belongs to `loadData` / `parseBindingDocument`, never to `load`) — when `true`, all three SDKs walk subdirectories recursively (Python via `Path.rglob`, TypeScript via `_collectRecursive`, Rust via `walkdir::WalkDir`). Governs traversal depth only.
+- `pattern`: string, optional, default=`"*.binding.yaml"` — matched against each candidate's **file name**. Ignored when `path` is a file. See [Pattern Matching](#pattern-matching) for the supported syntax and the validation rules. Signatures differ by SDK only in how an optional argument is idiomatically expressed:
+
+    | SDK | Signature |
+    |---|---|
+    | Python | `load(path, *, strict=False, recursive=False, pattern="*.binding.yaml")` |
+    | TypeScript | `load(filePath, strict?, recursive?, pattern?)` |
+    | Rust | `load(&self, path, strict, recursive)` unchanged; `load_with_pattern(&self, path, strict, recursive, pattern: Option<&str>)` added |
+
+    Rust gains a second method rather than a fourth parameter because adding one would break every existing caller; `load` delegates to `load_with_pattern(..., None)`. This is the same two-tier shape `apcore` uses for `load_binding_dir` / `load_binding_dir_with_config`.
 
 ### Errors
 - `BindingLoadError` / `BindingLoadError` (Python raises, Rust returns `Err`) — path not found, YAML parse failure, or strict mode violation
+- `BindingLoadError` — `pattern` is empty or contains a path separator; raised before any filesystem access
 - `BindingLoadError::FileRead` (Rust) — any OS/IO error on the *root* path; per-entry errors during recursive traversal are governed by the policy below
 - `BindingLoadError` (Python) — OS errors on the root path wrapping `IOError`/`OSError` raise immediately
 

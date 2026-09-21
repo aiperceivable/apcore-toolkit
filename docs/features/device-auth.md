@@ -4,21 +4,37 @@ description: "PROPOSED (not implemented) RFC 8628 Device Authorization Flow clie
 
 # Device Authorization Flow — V1 Proposal
 
-!!! warning "Status: PROPOSED — not implemented"
-    This document is a design proposal. No code ships against this spec in
-    v0.10.x. It is the relocated, re-scoped form of a proposal originally filed
-    against `apcore-cli` as "Standardized RFC 8628 (Device Authorization Flow)
-    for CLI Authentication".
+!!! info "Status: ACCEPTED — design settled, no code written"
+    Both blocking prerequisites are resolved (2026-09-08) and every open
+    question has a recorded decision, so this document is no longer a
+    proposal awaiting a verdict — it is an accepted design awaiting
+    implementation capacity. **Nothing ships against it yet.** It is the
+    relocated, re-scoped form of a proposal originally filed against
+    `apcore-cli` as "Standardized RFC 8628 (Device Authorization Flow) for
+    CLI Authentication".
 
     | | |
     |---|---|
     | **Author** | apcore-toolkit maintainers |
     | **First drafted** | 2026-09-03 |
-    | **Target release** | 0.11.0 (earliest) |
+    | **Accepted** | 2026-09-08 |
+    | **Target release** | 0.13.0 (earliest) — deliberately *not* bundled with the 0.12.0 `BindingLoader.pattern` work |
     | **Tracking issue** | [aiperceivable/apcore-toolkit#17](https://github.com/aiperceivable/apcore-toolkit/issues/17) |
-    | **Depends on** | [`output-writers.md`](output-writers.md) (`HTTPProxyRegistryWriter.auth_header_factory` — the integration point, already shipped) |
+    | **Depends on** | [`output-writers.md`](output-writers.md#auth_header_factory-invocation-contract) — the integration point, shipped, and its invocation contract now verified |
     | **Affects** | `apcore-cli-{python,typescript,rust}` (terminal UI half, separate PRs) · `apexe` (credential-baseline note, see [Downstream Impact](#downstream-impact)) |
-    | **Requires** | An amendment to [`scope.md`](../scope.md) — see [Scope Reconciliation](#scope-reconciliation) |
+    | **Requires** | ~~An amendment to [`scope.md`](../scope.md)~~ — **done**, see [Scope Reconciliation](#scope-reconciliation) |
+
+!!! success "The gating artifact exists: `conformance/fixtures/device_auth.json`"
+    Phase 1.5 is done. The corpus — **65 cases** — was written, validated
+    against an executable reading of this document, and committed **before**
+    any SDK started, exactly as `view_model.json` preceded the three
+    `TuiViewModel` implementations. That ordering is not ceremony: the
+    surfaces implemented first and reconciled later (`csv`/`jsonl` before
+    0.7.0) produced three independent bugs, and this is the only
+    credential-handling surface in the toolkit, where a cross-SDK divergence
+    is a security bug rather than a formatting nit.
+
+    Phase 2 (~2000 LOC across three SDKs) implements against it.
 
 ---
 
@@ -62,7 +78,7 @@ document takes that split literally and specifies where the line falls.
 
 ## Scope Reconciliation
 
-[`scope.md`](../scope.md#not-a-workflow-engine) currently states:
+[`scope.md`](../scope.md#not-a-workflow-engine) **used to state** (amended 2026-09-08 per this section; the original wording is kept here so the reasoning below still reads):
 
 > **Not a Workflow Engine** — Orchestration, token management, and multi-agent
 > coordination belong to `apflow`, not the toolkit.
@@ -504,9 +520,18 @@ the sibling proposal applies to spec loading:
 - The discovery document is **not** trusted to override an explicitly
   configured endpoint. Explicit configuration always wins, so a compromised or
   misconfigured discovery document cannot silently redirect a token request.
-- The discovered endpoints MUST be `https://` and SHOULD share the issuer's
-  origin; a discovery document pointing its token endpoint at an unrelated host
-  is rejected rather than followed.
+- **Discovered endpoints MUST be `https://`.** A discovered `http://` endpoint
+  is refused, not warned about. This is the hard rule.
+- **A discovered endpoint on a different origin than the issuer is warned about
+  and then followed**, not rejected. *(Amended 2026-09-08. This bullet
+  previously said such an endpoint "is rejected rather than followed", which
+  was both self-contradictory — `SHOULD` and "rejected" cannot both hold — and
+  in conflict with conformance case 029. Rejecting breaks real providers, which
+  routinely host the token endpoint on a separate host from the issuer. The
+  document's authority is already established by two other checks: it was
+  fetched from the issuer's own well-known path over TLS, and its `issuer`
+  field was compared verbatim. A third, weaker check that breaks conforming
+  providers buys nothing those two do not already cover.)*
 - Providers that publish no discovery document, or omit the device endpoint
   from it, simply take the explicit-configuration path. Discovery is a
   convenience, never a requirement.
@@ -535,7 +560,30 @@ The configuration therefore covers both dimensions — *how* to authenticate and
 |---|---|
 | `none` (default) | `client_id` in the form body, no secret. The RFC's public-client assumption |
 | `client_secret_post` | `client_id` + `client_secret` in the form body |
-| `client_secret_basic` | HTTP Basic header; `client_id` remains in the body |
+| `client_secret_basic` | HTTP Basic header; `client_id` remains in the body. **The client id and secret are form-urlencoded before base64**, per RFC 6749 §2.3.1 — *(specified 2026-09-08)*. Raw concatenation is a real defect, not a style choice: a secret containing `+` arrives at the server as one containing a space. |
+
+!!! note "Which form-encoding variant is deliberately not specified"
+    *(Added 2026-09-08, after all three SDKs had landed.)* The languages'
+    default helpers disagree on how a space, `*`, and `~` are spelled:
+
+    | Helper | space | `+` | `*` | `~` |
+    |---|---|---|---|---|
+    | Python `quote_plus` | `+` | `%2B` | `%2A` | `~` |
+    | JS `URLSearchParams` | `+` | `%2B` | `*` | `%7E` |
+    | JS `encodeURIComponent` | `%20` | `%2B` | `*` | `~` |
+
+    **All three decode identically**, so no server can tell them apart. The
+    corpus therefore asserts the *round trip* — form-decoding the body returns
+    every parameter unchanged — rather than an exact byte string. Cases 058 and
+    061 were written as exact-bytes assertions first and rewritten, because
+    pinning one spelling would have forced two SDKs to hand-roll an encoder for
+    zero functional gain.
+
+    This is the repository's [ownership
+    rule](../reference/conformance.md) applied rather than assumed:
+    byte-equivalence is for formats two consumers must compare, and the
+    consumer here is a third-party authorization server that decodes. What
+    must not vary is that encoding happens at all.
 
 When a secret is configured, it is sent on **both** the device authorization
 and token requests unless the provider is known to want otherwise. Providers
@@ -1019,11 +1067,38 @@ both the clock and the sleep function MUST be injectable. Each SDK exposes
 these as optional constructor parameters defaulting to the real
 implementations:
 
-| SDK | Clock | Sleep |
-|---|---|---|
-| Python | `clock: Callable[[], float] = time.monotonic` | `sleep: Callable[[float], None] = time.sleep` |
-| TypeScript | `now?: () => number` | `sleep?: (ms: number) => Promise<void>` |
-| Rust | `clock: Box<dyn Fn() -> Instant>` | `sleep: Box<dyn Fn(Duration) -> BoxFuture<'static, ()>>` |
+| SDK | Monotonic clock (deadline) | Sleep | Wall clock (`expires_at`) |
+|---|---|---|---|
+| Python | `clock: Callable[[], float] = time.monotonic` | `sleep: Callable[[float], None] = time.sleep` | `wall_clock: Callable[[], float] = time.time` |
+| TypeScript | `clock?: () => number` | `sleep?: (ms: number) => Promise<void>` | `wallClock?: () => number` |
+| Rust | `clock: Box<dyn Fn() -> Instant>` | `sleep: Box<dyn Fn(Duration) -> BoxFuture<'static, ()>>` | `wall_clock: Box<dyn Fn() -> SystemTime>` |
+
+**There are three injection points, not two.** *(Added 2026-09-08; the table
+named only two, while conformance case 015 pins a wall-clock `now` of 1000.)*
+The two clocks are not interchangeable and the split is the one described under
+[`TokenSet`](#tokenset): the **monotonic** clock measures the polling deadline,
+so an NTP correction or a laptop suspend cannot make it jump; the **wall**
+clock computes `expires_at`, which must survive a process restart and so cannot
+be monotonic. An implementation that reuses one for both fails case 015 or
+becomes untestable.
+
+#### Poll-loop ordering (normative)
+
+```
+loop:
+    sleep(interval)
+    elapsed += interval
+    if elapsed >= deadline:  ->  deadline_exceeded, stop
+    poll the token endpoint
+    dispatch on the body
+```
+
+*(Stated normatively 2026-09-08. The corpus pinned this; the prose did not, and
+it is the most likely off-by-one in the whole implementation.)* Checking the
+deadline **before** sleeping instead is visually equivalent and wrong: case 023
+requires 180 sleeps and 179 polls against a 900-second deadline at a
+5-second interval, and the other ordering gives 180 of each. Case 008 fails the
+same way.
 
 Elapsed-time measurement MUST use a **monotonic** clock, not wall-clock time,
 so that an NTP correction or a laptop suspend/resume mid-flow cannot make the
@@ -1169,6 +1244,12 @@ Implementations MUST therefore:
 - Treat a refresh failure with `invalid_grant` as **terminal**: the refresh
   token is spent or revoked, and the correct response is to discard the stored
   credential and require a fresh login, not to retry.
+- **`error_aliases` does not apply on the refresh path.** *(Specified
+  2026-09-08.)* The refresh path inspects the **raw, unaliased** identifier, so
+  the rule above still fires for a consumer who opted into
+  `invalid_grant` → `expired_token` for the device-code path. Without this, the
+  one alias the spec explicitly describes would disable the one terminal rule
+  that protects the store.
 
 ### Concurrency
 
@@ -1332,9 +1413,10 @@ config = DeviceAuthConfig(
 
 client = DeviceAuthClient(config, store=FileTokenStore())
 
+# Callbacks receive KEYWORD arguments in Python - see the login contract below.
 tokens: TokenSet = client.login(
-    on_user_code=lambda uri, code, uri_complete, expires_in: print(
-        f"Visit {uri} and enter {code}"
+    on_user_code=lambda *, verification_uri, user_code, **_: print(
+        f"Visit {verification_uri} and enter {user_code}"
     ),
 )
 
@@ -1427,10 +1509,46 @@ proxy writer knowing anything about OAuth.
 
 ## Conformance Corpus
 
-A fixture file lives at `conformance/fixtures/device_auth.json`, following
-the structure used by `format_csv.json` and `display_resolve.json` (a single
-JSON document with `$schema`, `title`, `description`, `version`, and a
-`test_cases` array).
+The fixture lives at
+[`conformance/fixtures/device_auth.json`](https://github.com/aiperceivable/apcore-toolkit/blob/main/conformance/fixtures/device_auth.json)
+and follows the structure used by `format_csv.json` and `display_resolve.json`
+(a single JSON document with `$schema`, `title`, `description`, `version`, and
+a `test_cases` array). It ships **65 cases** — the 55 enumerated below, plus ten added during review and
+during the three SDK implementations. See [Harness contract](#harness-contract).
+
+### Harness contract
+
+Read these before writing a harness; they are what make the corpus runnable
+without a network:
+
+| Convention | Meaning |
+|---|---|
+| `kind` | One of `poll`, `expiry`, `refresh`, `discovery_url`, `discovery`, `parse`, `request`, `redaction`, `alias_validation`, `hook`. Dispatch on it. |
+| `poll_delays[i]` | The sleep performed **before** `token_responses[i]`. The first entry is therefore the initial wait, never `0`. |
+| `polls_made` | How many scripted responses were actually consumed. A case scripting more responses than this is asserting the client **stopped**. |
+| `repeat_last_response` | When `true`, the final scripted response repeats indefinitely — used by case 023, whose 15-minute deadline would otherwise need 180 literal entries. |
+| Wall clock | Pinned to `1000` wherever a case asserts `expires_at` or `obtained_at`. The **polling** clock stays monotonic and advances only by the sleeps. |
+| `transport_error: true` | A scripted connection failure rather than an HTTP response. |
+
+**Six cases beyond the 55 below, each closing a way to pass without asserting anything.**
+
+| Case | Why it exists |
+|---|---|
+| `expiry_017b_not_yet_expired` | The negative of 017. An implementation returning `true` unconditionally passes 017 alone. |
+| `provider_025b_alias_onto_standard_accepted` | The negative of 025. One rejecting every alias passes 025 alone. |
+| `discovery_056_http_endpoint_refused` | The hard half of the endpoint rule — `http://` is refused. |
+| `discovery_057_cross_origin_endpoint_warned_not_refused` | The soft half — a different origin is warned about and followed. Pins the 2026-09-08 amendment that resolved the spec's self-contradiction against case 029. |
+| `clientauth_058_basic_urlencodes_before_base64` | Case 049's `cid`/`sec` encode identically under both readings, so it cannot discriminate. This one uses a secret containing `:`, `+` and a space. |
+| `refresh_059_aliases_do_not_apply_on_refresh` | An opted-in `invalid_grant` alias must not disable the terminal store-clearing rule. |
+
+**Cases 045 and 046 were rewritten during the first implementation** because
+both were vacuous as originally written. 045 supplied no body, so a harness
+inventing a *standard* identifier resolved it before the hook was ever reached
+and nothing raised; 046 used `access_denied`, which resolves without the hook,
+so it passed whatever the hook did. Both now carry a deliberately unresolved
+identifier. This is worth recording rather than quietly fixing: a corpus case
+that cannot fail is worse than no case, because it reports coverage that does
+not exist.
 
 Because the state machine is pure over an injected clock and a scripted
 response sequence, **no HTTP mocking is required in any SDK**. Each case
@@ -1556,7 +1674,7 @@ that regresses.
 ## Contract: DeviceAuthClient.login
 
 ### Inputs
-- `on_user_code` / `onUserCode`: callback, optional — invoked once with `verification_uri`, `user_code`, `verification_uri_complete` (nullable), `expires_in`
+- `on_user_code` / `onUserCode`: callback, optional — invoked once with `verification_uri`, `user_code`, `verification_uri_complete` (nullable), `expires_in`. **`expires_in` is the *effective* deadline, never null** — the callback receives the number the poll loop actually uses: the server's `expires_in` when it sends one, the 900-second fallback when it does not, and `timeout_seconds` whenever that is shorter than either. One number, and it is the one the flow will really stop at. *(Specified 2026-09-08 after it surfaced as a live three-way divergence: Python passed 900 while TypeScript and Rust passed null.)* A consumer rendering a countdown must be told when the client will really give up; passing null makes every consumer reimplement the fallback, which is the per-CLI duplication this proposal exists to remove. Cases 060, 060b and 060c pin the three inputs. 060c was added last: all three SDKs had correctly clamped the *deadline* with `timeout_seconds` and then reported the unclamped server value to the callback — consistently inconsistent with the sentence above, which is the failure mode a corpus catches only when someone writes the case.
 - `on_poll` / `onPoll`: callback, optional — invoked before each poll with `attempt`, `interval`, `elapsed`
 
 !!! note "Callback shape differs per SDK, deliberately"
@@ -1633,7 +1751,7 @@ that regresses.
 - `clear(key)` → void — idempotent; clearing an absent key is not an error
 
 ### Inputs
-- `key`: string, required — canonically `"<issuer>|<client_id>"`, so multiple authorization servers coexist in one store
+- `key`: string, required — canonically `"<issuer>|<client_id>"`, so multiple authorization servers coexist in one store. **When no `issuer` is configured** — the explicit-endpoints path, which is a first-class option — the key falls back to `"<token_endpoint>|<client_id>"`. *(Specified 2026-09-08; previously undefined, and three SDKs inventing three fallbacks would write stores that cannot read each other.)*
 
 ### Errors
 - `CredentialPermissionError` — an existing file has permissions broader than `0600`; refuse rather than read
@@ -1660,6 +1778,20 @@ transform_request  →  [HTTP]  →  parse_response  →  field-name aliasing
                                         →  error_aliases  →  classify_error
                                         →  state-machine dispatch
 ```
+
+!!! important "`classify_error` is consulted only when the identifier is still unresolved"
+    *(Clarified 2026-09-08.)* The arrow diagram shows precedence, and precedence
+    here also means **skipping**: read the identifier through field aliases,
+    apply `error_aliases`, and if the result is one of the four standard
+    identifiers, dispatch immediately — `classify_error` is not called at all.
+    Only a body whose identifier is still unresolved reaches the hook.
+
+    This matters beyond tidiness. "Always call the hook and let the alias win"
+    and "call the hook only when unresolved" produce identical results for a
+    pure hook, so both pass the corpus — but they differ observably for a hook
+    that raises, logs, or has any other side effect. Three SDKs could each pick
+    one and all stay green. Case 047 pins the precedence; this paragraph pins
+    the skipping.
 
 ### transform_request
 
@@ -1697,17 +1829,38 @@ transform_request  →  [HTTP]  →  parse_response  →  field-name aliasing
 
 ## Migration Plan
 
-### Phase 0 — Resolve the scope question (blocking)
+### Phase 0 — Resolve the scope question ✅ done (2026-09-08)
 
-Amend [`scope.md`](../scope.md) per [Scope Reconciliation](#scope-reconciliation),
-or reject this proposal. Nothing else should start until the boundary document
-and the plan agree.
+[`scope.md`](../scope.md#not-a-workflow-engine) has been amended. "Token
+management" no longer appears as an undifferentiated exclusion; the clause now
+separates `apflow`'s two token concerns (context-token budgeting, and issuing
+`apflow`'s own service JWTs) from third-party credential *acquisition*, and
+admits the latter to the toolkit on the narrow grounds that the toolkit already
+ships the `auth_header_factory` seam this fills.
 
-### Phase 1 — Verify the writer's factory contract (blocking)
+### Phase 1 — Verify the writer's factory contract ✅ done (2026-09-08)
 
-Confirm whether the shipped `HTTPProxyRegistryWriter` invokes
-`auth_header_factory` per request or once at construction, and document the
-answer in `output-writers.md`. Transparent refresh depends on it.
+Verified against the shipped 0.11.1 sources and recorded in
+[`output-writers.md`](output-writers.md#auth_header_factory-invocation-contract).
+Two findings:
+
+- **Per request, not at construction.** All three SDKs call the factory from
+  inside `execute`, so a rotating credential is picked up without any writer
+  change. Transparent refresh is reachable.
+- **Synchronous in all three.** The return type is a plain header mapping with
+  no promise, future, or coroutine. This is what makes [Open
+  Question 1](#open-questions) real rather than hypothetical, and it is now
+  answered below.
+
+### Phase 1.5 — Write the conformance corpus first (blocking)
+
+`conformance/fixtures/device_auth.json` is written, reviewed, and committed
+**before** any SDK implementation begins. This ordering is not a preference:
+`view_model.json` preceded the three `TuiViewModel` implementations and
+produced zero divergences, while the surfaces that were implemented first and
+reconciled later (`csv`/`jsonl` before 0.7.0) produced three independent bugs.
+Credential handling is the worst possible surface on which to repeat the
+second pattern.
 
 ### Phase 2 — Toolkit implementation
 
@@ -1745,7 +1898,48 @@ In `apcore-toolkit-{python,typescript,rust}`:
 Open an issue against `apexe` to add the credentials path to its
 credential-baseline list.
 
+## Decisions
+
+*Recorded 2026-09-08. Every question below now has a verdict; the questions and
+their option tables are kept verbatim because the reasoning is what makes a
+later reversal auditable.*
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Async refresh through a synchronous factory | **Option A — widen the factory.** Phase 1 verified the signature is synchronous in all three SDKs, so this is a real constraint. TypeScript widens the return type to `Record` \| `Promise<Record>` and awaits (awaiting a non-promise is a no-op, so every existing caller keeps working); Rust adds a *separate* optional `async_auth_header_factory` field rather than changing the existing one; Python stays synchronous because its `httpx` path already is. Option C stays available as an interim if the writer change cannot land first. |
+| 2 | Cross-process refresh locking | **Defer.** V1 relies on atomic replace. The race costs a redundant re-login, which is recoverable; correct advisory locking differs meaningfully in all three languages. Revisit only on an observed failure. |
+| 3 | Encrypt `FileTokenStore` at rest | **No.** A key stored next to its ciphertext is theatre. Ship `0600` plus honest documentation; real protection is an OS keychain, which is a consumer concern. |
+| 4 | Multi-account support | **Defer.** The store is keyed on the issuer and client id joined by a pipe (`<issuer>` \| `<client_id>`), giving one identity per authorization server. The key format extends without a migration when a profile concept is actually asked for. |
+| 5 | V1 grant scope | **Option A — device flow only — with the `Grant` interface in place from the start.** This is a deliberate scope-down from this document's original Option B recommendation; see the note below. |
+| 6 | MCP-compliant authorization for `apcore-mcp` | **Its own proposal.** Materially different (OAuth 2.1, mandatory PKCE, RFC 8707 resource indicators, 401-driven RFC 9728 discovery). Nothing here blocks it, and the issuer-keyed store is already compatible. |
+
+### Note on Decision 5 — why A rather than the recommended B
+
+The argument for B is sound and is not disputed: headless AI tooling has
+largely standardised on manual code entry, and six of the eight components are
+grant-independent, so B is cheaper than it looks. Two things still favour A for
+**V1**:
+
+- **B needs PKCE, and PKCE widens the one surface whose risk mitigation depends
+  on being narrow.** This document's own risk table rates a credential-handling
+  defect as the highest-severity failure class here and mitigates it with
+  "narrow surface (one grant type)". Adding an S256 challenge/verifier path in
+  the same release removes that mitigation while the corpus is still new.
+- **There is no committed consumer yet.** Phase 3 has not started in any
+  `apcore-cli` SDK. B is justified by what the *first* consumer will hit;
+  until one exists, it is speculative scope on a security surface.
+
+The cost of being wrong is bounded and was made bounded on purpose: because the
+`Grant` interface ships in V1, adding `ManualCodeGrant` later is one new
+implementation against a stable seam, not a rewrite. **This decision reverses
+the moment a consumer names a provider without device-flow support** — that is
+the trigger to widen, and it should be recorded on issue #17 when it happens.
+
 ## Open Questions
+
+*All six are resolved — see [Decisions](#decisions) for the verdicts. The
+questions and their option tables are retained verbatim because the reasoning
+is what makes a later reversal auditable.*
 
 1. **How does an async refresh reach a synchronous factory?** This is the one
    genuinely blocking design question. Invocation timing is settled (per
@@ -1754,7 +1948,7 @@ credential-baseline list.
 
     | Option | Assessment |
     |---|---|
-    | **A. Widen the factory to allow an async return** | TypeScript: fully backward-compatible — widen to `Record \| Promise<Record>` and `await` it (awaiting a non-promise is a no-op). Rust: add a separate optional `async_auth_header_factory` field rather than changing the existing one, keeping the current API intact. Python stays synchronous, since its `httpx` path already is. |
+    | **A. Widen the factory to allow an async return** | TypeScript: fully backward-compatible — widen to `Record` \| `Promise<Record>` and `await` it (awaiting a non-promise is a no-op). Rust: add a separate optional `async_auth_header_factory` field rather than changing the existing one, keeping the current API intact. Python stays synchronous, since its `httpx` path already is. |
     | **B. Proactive background refresh** | A timer refreshes ahead of expiry so the factory always returns a fresh cached token. Requires a background task in a CLI process that may live for two seconds; awkward and easy to leak. |
     | **C. Caller invokes `ensure_valid()` explicitly** | Simple and requires no writer change, but abandons transparency — every call site must remember, which is exactly the per-CLI duplication this proposal exists to remove. |
     | **D. Block on the refresh inside a sync factory** | Impossible in TypeScript; in Rust, `block_on` inside an async context deadlocks or panics. Not viable. |

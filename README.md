@@ -6,11 +6,11 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://github.com/aiperceivable/apcore-toolkit-python)
-[![Python SDK](https://img.shields.io/badge/python_sdk-0.11.1-green)](https://github.com/aiperceivable/apcore-toolkit-python)
+[![Python SDK](https://img.shields.io/badge/python_sdk-0.13.0-green)](https://github.com/aiperceivable/apcore-toolkit-python)
 [![TypeScript Version](https://img.shields.io/badge/typescript-5.0%2B-blue)](https://github.com/aiperceivable/apcore-toolkit-typescript)
-[![TypeScript SDK](https://img.shields.io/badge/typescript_sdk-0.11.1-green)](https://github.com/aiperceivable/apcore-toolkit-typescript)
+[![TypeScript SDK](https://img.shields.io/badge/typescript_sdk-0.13.0-green)](https://github.com/aiperceivable/apcore-toolkit-typescript)
 [![Rust Version](https://img.shields.io/badge/rust-1.70%2B-blue)](https://github.com/aiperceivable/apcore-toolkit-rust)
-[![Rust SDK](https://img.shields.io/badge/rust_sdk-0.11.1-green)](https://github.com/aiperceivable/apcore-toolkit-rust)
+[![Rust SDK](https://img.shields.io/badge/rust_sdk-0.13.0-green)](https://github.com/aiperceivable/apcore-toolkit-rust)
 [![apcore](https://img.shields.io/badge/apcore-0.30.0%2B-orange)](https://github.com/aiperceivable/apcore-python)
 
 **apcore-toolkit** is a cross-language metadata pipeline for the [apcore](https://github.com/aiperceivable/apcore-python) ecosystem. It turns framework routes, convention-based functions, or complete OpenAPI 3.0/3.1 documents into portable `ScannedModule` values, then refines, presents, exports, or registers them for downstream surfaces.
@@ -233,7 +233,7 @@ The mirror table also lives in
 | `ScannedModule` | Canonical model representing a discovered capability |
 | `BaseScanner` | Abstract base class for framework scanners |
 | `YAMLWriter` | Generates `.binding.yaml` files for `apcore.BindingLoader` |
-| `BindingLoader` | Parses `.binding.yaml` files back into `ScannedModule` objects (pure-data inverse of `YAMLWriter`); loose/strict modes; round-trip with `display`, `annotations`, `metadata` |
+| `BindingLoader` | Parses `.binding.yaml` files back into `ScannedModule` objects (pure-data inverse of `YAMLWriter`); loose/strict modes; caller-supplied `pattern` honouring apcore's `bindings.pattern`; round-trip with `display`, `annotations`, `metadata` |
 | `PythonWriter` | Generates `@module`-decorated Python wrapper files |
 | `TypeScriptWriter` | Generates `@module`-decorated TypeScript wrapper files |
 | `RegistryWriter` | Registers modules directly into an `apcore.Registry` |

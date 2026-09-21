@@ -525,10 +525,62 @@ apcore-cli.
 - **`TuiDetailViewModel`** (separate proposal): the detail-view counterpart
   modelled as typed sections + key/value blocks + schema trees.
 
+## Decisions
+
+*Recorded 2026-09-08, after verifying what actually shipped in
+`apcore-toolkit-{python,typescript,rust}` 0.11.1. Four of the five
+recommendations below were adopted as written; the fifth was not, and is now
+tracked as follow-up work rather than left implicit.*
+
+| # | Question | Outcome | Evidence |
+|---|---|---|---|
+| 1 | Tone palette size | **Locked at 5** as recommended | `Tone` = `"neutral"` \| `"positive"` \| `"negative"` \| `"warning"` \| `"info"` |
+| 2 | Cell kinds | **Locked at 4** as recommended — no `json`, no `link` in V1 | `CellKind` = `"text"` \| `"tags"` \| `"badge"` \| `"symbol"` |
+| 3 | Status filter (enabled/disabled) | **SDK-side** as recommended; `ScannedModule` was not extended | no `status` handling in any SDK's view-model source |
+| 4 | Display-overlay precedence | **NOT adopted.** See below. | the builder resolves `display.alias > module_id` — the narrow toolkit chain, not the CLI's |
+| 5 | Schema-versioning policy | **Adopted**: `schema_version: 1`, additive-only; renames require a bump; renderers fall back to plain text on unknown `Cell.kind` / `Tone` | `schema_version: int = 1` emitted in every envelope |
+
+### Decision 4 was not implemented — and the divergence it named still ships
+
+This is the one item worth stating plainly rather than closing quietly. The
+recommendation was to lift `apcore-cli`'s richer chain
+(`display.cli.alias > display.alias > canonical_id`) into the toolkit. What
+shipped instead reads the **sparse** overlay's top-level alias only:
+
+```
+display.alias  >  module_id
+```
+
+It consults neither the surface-scoped `display.cli.alias` nor the *resolved*
+form that [`DisplayResolver`](display-overlay.md) writes into
+`metadata["display"]` — even though the resolver already implements the full
+chain (`surface override > display.alias > binding alias > suggested_alias >
+module_id`).
+
+The practical effect is bounded but real: a binding that sets only
+`display.cli.alias` renders its alias in `apcore-cli` and its bare `module_id`
+in the view model, so the two disagree on the same input. This is precisely the
+"display-overlay precedence drift" that issue #14 listed among the user-visible
+consequences already shipping — so the lift closed the *column and filter*
+divergences it set out to close, and left this one open.
+
+**Follow-up, not a V1 blocker.** Two candidate fixes, in preference order:
+
+1. Have the builder consume `metadata["display"]` when present, falling back to
+   the sparse `display` overlay when it is absent — reusing the resolver rather
+   than reimplementing precedence a third time.
+2. Failing that, extend `_resolve_alias` with the surface-scoped lookup and
+   pin the chain with `display_resolve.json` cases.
+
+Either is additive under Decision 5's policy — no `schema_version` bump — and
+neither belongs in the same change as the Phase 2 CLI migration, which should
+be able to assume a settled chain.
+
 ## Open Questions
 
-These are intentionally listed so contributors can weigh in before V1
-implementation locks the schema:
+*All five are resolved — see [Decisions](#decisions) for the verdicts and the
+evidence from the shipped 0.11.1 sources. Retained verbatim because Decision 4
+was **not** adopted, and the original reasoning is what makes that legible.*
 
 1. **Tone palette: 5 semantic tones vs more?** Current proposal:
    `neutral / positive / negative / warning / info`. Argument for: matches
@@ -580,7 +632,7 @@ and corpus rewrite.
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Over-engineering for current 3-consumer reality | Medium | Defer Phase 1 until a 4th consumer surfaces (most likely `aisee-cli` adopting `--format table`). Spec exists as proposal; implementation is gated. |
+| Over-engineering for current 3-consumer reality | Medium | ~~Defer Phase 1 until a 4th consumer surfaces.~~ **Superseded 2026-09-04:** the gate was passed and Phase 1 shipped in all three SDKs. The risk now reads forward, to Phase 2: if no consumer adopts the view model, the toolkit carries a surface nothing renders. Mitigated by Phase 2 being a net **−360 LOC** migration for the three existing CLIs — adoption removes more code than it adds. |
 | Schema-evolution debt — V1 schema breaks needed | Medium | Lock the encoding rules conservatively (no floats, no null, no maps). Document `schema_version` bump policy. |
 | `TuiCell.kind = "json"` becomes load-bearing later | Low-medium | Defer adding it until a specific consumer needs it. The discriminated-union design makes additions non-breaking. |
 | `TonePalette` design (`tag_equals` only) too narrow | Low | Add `match.kind` variants (e.g. `annotation_true`, `regex`) when needed. The current rule is the only one demanded by existing CLI behaviour. |

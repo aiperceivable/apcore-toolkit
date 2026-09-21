@@ -58,7 +58,30 @@ The toolkit's job is to **extract** metadata from existing code and **produce** 
 
 ### Not a Workflow Engine
 
-Orchestration, token management, and multi-agent coordination belong to `apflow`, not the toolkit.
+Orchestration and multi-agent coordination belong to `apflow`, not the toolkit.
+
+**Clarification on "token management" (amended 2026-09-08).** This sentence
+previously read "Orchestration, token management, and multi-agent
+coordination", which was ambiguous because `apflow` demonstrably owns two
+different things the phrase can mean: LLM context-token *budgeting*
+(`TokenBudget` / `BudgetManager`, cost governance) and a JWT surface captioned
+"Token Management" (`apflow config gen-token` / `verify-token`). Neither is
+what a credential-acquisition client does. The boundary the toolkit holds is:
+
+| Concern | Owner |
+|---|---|
+| LLM context-token budgets, cost governance, model downgrade chains | `apflow` |
+| Issuing and verifying `apflow`'s own service JWTs | `apflow` |
+| Acquiring an OAuth credential from a third-party authorization server, and keeping it fresh, so a toolkit-produced artifact can call an authenticated API | **`apcore-toolkit`** |
+| Turning a validated token into an `Identity` with roles and claims | `apcore` and its server-side adapters |
+
+The third row is admitted deliberately, and it is narrow: the toolkit already
+ships `HTTPProxyRegistryWriter` with an `auth_header_factory` seam and has no
+way to fill it. A capability that produces the credential that seam consumes
+sits inside the toolkit's existing remit — "produce artifacts that apcore can
+consume" — rather than beside it. It remains **not** a general OAuth library
+(see [`features/device-auth.md`](features/device-auth.md) Non-Goals) and **not**
+an authorization server.
 
 ## Relationship to Other Projects
 

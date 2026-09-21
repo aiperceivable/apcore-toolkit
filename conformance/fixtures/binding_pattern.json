@@ -1,0 +1,618 @@
+{
+  "$schema": "https://apcore.dev/schemas/conformance-fixture.json",
+  "title": "Binding Loader — pattern matching and selection",
+  "description": "Byte-equivalent semantics for BindingLoader.load's `pattern` argument across Python / TypeScript / Rust. Three case kinds: `validate` asserts a pattern is rejected before any filesystem access, `match` asserts the pure name matcher, and `select` asserts how `pattern` composes with `recursive` over a directory tree. Harness convention for `select`: materialize each entry of `input.files` under a temp root, creating parent directories as needed; an entry that is a strict path prefix of another entry is therefore a DIRECTORY, not a file, and must never appear in `expected.selected` (see case 034). Paths in both `files` and `selected` use '/' separators and are relative to that root; compare against the loader's results after making them relative and normalizing separators. The normative matching algorithm is specified in docs/features/binding-loader.md#normative-matching-algorithm. Tracking issue: aiperceivable/apcore-toolkit#18. Cases carrying `requires: \"symlinks\"` need symlink creation; a harness on a platform where that fails (unprivileged Windows) should SKIP them with a visible message, never silently pass them.",
+  "version": "1.0.0",
+  "test_cases": [
+    {
+      "id": "binding_pattern_001_validate_empty",
+      "kind": "validate",
+      "description": "An empty pattern is rejected, not treated as match-nothing or match-everything",
+      "input": {
+        "pattern": ""
+      },
+      "expected": {
+        "error": "empty_pattern"
+      }
+    },
+    {
+      "id": "binding_pattern_002_validate_forward_slash",
+      "kind": "validate",
+      "description": "A forward slash is rejected — pattern matches file names, not paths",
+      "input": {
+        "pattern": "sub/*.binding.yaml"
+      },
+      "expected": {
+        "error": "path_separator"
+      }
+    },
+    {
+      "id": "binding_pattern_003_validate_globstar_prefix",
+      "kind": "validate",
+      "description": "`**/` is the shape callers reach for first and is wrong here; depth is `recursive`'s job",
+      "input": {
+        "pattern": "**/*.binding.yaml"
+      },
+      "expected": {
+        "error": "path_separator"
+      }
+    },
+    {
+      "id": "binding_pattern_004_validate_backslash",
+      "kind": "validate",
+      "description": "A backslash is rejected on every platform, not just Windows",
+      "input": {
+        "pattern": "sub\\*.binding.yaml"
+      },
+      "expected": {
+        "error": "path_separator"
+      }
+    },
+    {
+      "id": "binding_pattern_005_validate_trailing_slash",
+      "kind": "validate",
+      "description": "A trailing separator is still a separator",
+      "input": {
+        "pattern": "*.binding.yaml/"
+      },
+      "expected": {
+        "error": "path_separator"
+      }
+    },
+    {
+      "id": "binding_pattern_006_match_default_positive",
+      "kind": "match",
+      "description": "The canonical default matches an ordinary binding file",
+      "input": {
+        "pattern": "*.binding.yaml",
+        "name": "users.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_007_match_default_negative_extension",
+      "kind": "match",
+      "description": "A different extension does not match the default",
+      "input": {
+        "pattern": "*.binding.yaml",
+        "name": "users.binding.yml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_008_match_star_spans_dots",
+      "kind": "match",
+      "description": "`*` crosses `.` — it is not a shell path-segment wildcard",
+      "input": {
+        "pattern": "*.binding.yaml",
+        "name": "a.b.c.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_009_match_star_matches_empty",
+      "kind": "match",
+      "description": "`*` matches zero characters, so the bare suffix matches",
+      "input": {
+        "pattern": "*.binding.yaml",
+        "name": ".binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_010_match_leading_dot_not_excluded",
+      "kind": "match",
+      "description": "Dotfiles are matched normally — unlike a shell glob, and preserving pre-0.12.0 behaviour in all three SDKs",
+      "input": {
+        "pattern": "*.binding.yaml",
+        "name": ".hidden.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_011_match_prefix_star",
+      "kind": "match",
+      "description": "A prefix-anchored pattern — the case apcore's own Rust and TypeScript loaders get wrong",
+      "input": {
+        "pattern": "api-*.binding.yaml",
+        "name": "api-v1.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_012_match_prefix_star_negative",
+      "kind": "match",
+      "description": "A name failing the literal prefix does not match, even though the suffix does",
+      "input": {
+        "pattern": "api-*.binding.yaml",
+        "name": "cli-v1.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_013_match_infix_star",
+      "kind": "match",
+      "description": "A star in the middle with literals on both sides",
+      "input": {
+        "pattern": "data*.yaml",
+        "name": "data1.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_014_match_multiple_stars",
+      "kind": "match",
+      "description": "Two stars backtrack correctly",
+      "input": {
+        "pattern": "*-*.binding.yaml",
+        "name": "api-v1.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_015_match_multiple_stars_negative",
+      "kind": "match",
+      "description": "Two stars still require the literal between them",
+      "input": {
+        "pattern": "*-*.binding.yaml",
+        "name": "apiv1.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_016_match_consecutive_stars",
+      "kind": "match",
+      "description": "`**` without a separator is just `*`; it is not globstar",
+      "input": {
+        "pattern": "**.binding.yaml",
+        "name": "users.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_017_match_question_single_char",
+      "kind": "match",
+      "description": "`?` matches exactly one character",
+      "input": {
+        "pattern": "v?.binding.yaml",
+        "name": "v1.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_018_match_question_not_zero",
+      "kind": "match",
+      "description": "`?` does not match zero characters",
+      "input": {
+        "pattern": "v?.binding.yaml",
+        "name": "v.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_019_match_question_not_two",
+      "kind": "match",
+      "description": "`?` does not match two characters",
+      "input": {
+        "pattern": "v?.binding.yaml",
+        "name": "v10.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_020_match_question_matches_dot",
+      "kind": "match",
+      "description": "`?` matches a literal dot like any other character",
+      "input": {
+        "pattern": "a?b.binding.yaml",
+        "name": "a.b.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_021_match_bracket_is_literal",
+      "kind": "match",
+      "description": "Character classes are NOT supported — brackets are literal. Python's Path.glob would treat this as a class; the shared matcher must not.",
+      "input": {
+        "pattern": "[ab].binding.yaml",
+        "name": "a.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_022_match_bracket_literal_positive",
+      "kind": "match",
+      "description": "A file literally named with brackets matches the literal pattern",
+      "input": {
+        "pattern": "[ab].binding.yaml",
+        "name": "[ab].binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_023_match_brace_is_literal",
+      "kind": "match",
+      "description": "Brace expansion is NOT supported — braces are literal",
+      "input": {
+        "pattern": "{a,b}.binding.yaml",
+        "name": "a.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_024_match_case_sensitive",
+      "kind": "match",
+      "description": "Matching is case-sensitive on every platform, including macOS and Windows",
+      "input": {
+        "pattern": "*.binding.yaml",
+        "name": "users.BINDING.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_025_match_case_sensitive_literal",
+      "kind": "match",
+      "description": "The literal segment is case-sensitive too",
+      "input": {
+        "pattern": "API-*.binding.yaml",
+        "name": "api-v1.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_026_match_no_metachars_exact",
+      "kind": "match",
+      "description": "A pattern with no metacharacters is an exact-name match",
+      "input": {
+        "pattern": "users.binding.yaml",
+        "name": "users.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_027_match_no_metachars_not_substring",
+      "kind": "match",
+      "description": "A literal pattern is anchored at both ends — not a substring search",
+      "input": {
+        "pattern": "users.binding.yaml",
+        "name": "old-users.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_028_match_bare_star",
+      "kind": "match",
+      "description": "A bare `*` matches every name",
+      "input": {
+        "pattern": "*",
+        "name": "anything.at.all"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_029_match_unicode",
+      "kind": "match",
+      "description": "Matching is over Unicode characters, not bytes — `?` consumes one character, not one UTF-8 byte",
+      "input": {
+        "pattern": "?.binding.yaml",
+        "name": "é.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      },
+      "notes": "The `e` with acute in this case is NFC (U+00E9), a single code point, so `?` matches it. Under the spec's no-normalization rule the NFD spelling (e + U+0301) would be two code points and MUST expect false. Do not let a formatter normalize this file: the case's meaning lives in its bytes."
+    },
+    {
+      "id": "binding_pattern_030_match_suffix_only_pattern",
+      "kind": "match",
+      "description": "A pattern with no leading star is anchored at the start — the divergence apcore's Rust loader introduces by stripping a leading `*` and suffix-matching",
+      "input": {
+        "pattern": ".binding.yaml",
+        "name": "users.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_031_select_flat_default",
+      "kind": "select",
+      "description": "Non-recursive selection with the default pattern ignores subdirectories entirely",
+      "input": {
+        "files": [
+          "a.binding.yaml",
+          "b.binding.yaml",
+          "notes.md",
+          "nested/c.binding.yaml"
+        ],
+        "pattern": "*.binding.yaml",
+        "recursive": false
+      },
+      "expected": {
+        "selected": [
+          "a.binding.yaml",
+          "b.binding.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_032_select_recursive_default",
+      "kind": "select",
+      "description": "Recursive selection matches file names at every depth without the caller writing `**/`",
+      "input": {
+        "files": [
+          "a.binding.yaml",
+          "notes.md",
+          "nested/c.binding.yaml",
+          "nested/deep/d.binding.yaml"
+        ],
+        "pattern": "*.binding.yaml",
+        "recursive": true
+      },
+      "expected": {
+        "selected": [
+          "a.binding.yaml",
+          "nested/c.binding.yaml",
+          "nested/deep/d.binding.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_033_select_custom_pattern_flat",
+      "kind": "select",
+      "description": "A non-default pattern selects a different set — the case that could not be expressed before 0.12.0",
+      "input": {
+        "files": [
+          "api-v1.cli.yaml",
+          "api-v2.cli.yaml",
+          "web-v1.cli.yaml",
+          "api-v1.binding.yaml"
+        ],
+        "pattern": "api-*.cli.yaml",
+        "recursive": false
+      },
+      "expected": {
+        "selected": [
+          "api-v1.cli.yaml",
+          "api-v2.cli.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_034_select_custom_pattern_recursive",
+      "kind": "select",
+      "description": "`pattern` still matches names only when `recursive` is on — a directory named to look like a match is not selected",
+      "input": {
+        "files": [
+          "api-a.cli.yaml",
+          "api-b.cli.yaml/inner.cli.yaml",
+          "nested/api-c.cli.yaml"
+        ],
+        "pattern": "api-*.cli.yaml",
+        "recursive": true
+      },
+      "expected": {
+        "selected": [
+          "api-a.cli.yaml",
+          "nested/api-c.cli.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_035_select_lexicographic_order",
+      "kind": "select",
+      "description": "Selected files are sorted lexicographically by path; `pattern` does not change ordering",
+      "input": {
+        "files": [
+          "z.binding.yaml",
+          "a.binding.yaml",
+          "nested/b.binding.yaml",
+          "M.binding.yaml"
+        ],
+        "pattern": "*.binding.yaml",
+        "recursive": true
+      },
+      "expected": {
+        "selected": [
+          "M.binding.yaml",
+          "a.binding.yaml",
+          "nested/b.binding.yaml",
+          "z.binding.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_036_select_no_matches_is_empty_not_error",
+      "kind": "select",
+      "description": "A directory where nothing matches yields an empty list, not an error — unchanged from the pre-0.12.0 contract",
+      "input": {
+        "files": [
+          "notes.md",
+          "README.txt"
+        ],
+        "pattern": "*.binding.yaml",
+        "recursive": false
+      },
+      "expected": {
+        "selected": []
+      }
+    },
+    {
+      "id": "binding_pattern_037_select_directory_never_matches_flat",
+      "kind": "select",
+      "description": "A directory whose name matches is skipped in NON-recursive mode too. Case 034 pins this only for recursive traversal; without this twin, an implementation that filters on name alone selects the directory and then dies at read time with EISDIR, while one that guards on file type returns cleanly - a live three-way divergence.",
+      "input": {
+        "files": [
+          "a.binding.yaml",
+          "b.binding.yaml/inner.txt"
+        ],
+        "pattern": "*.binding.yaml",
+        "recursive": false
+      },
+      "expected": {
+        "selected": [
+          "a.binding.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_038_match_astral_single_question",
+      "kind": "match",
+      "description": "`?` matches exactly one astral code point. TypeScript is the only one of the three SDKs that can plausibly get this wrong - indexing a string yields UTF-16 code units, so a naive implementation needs two `?` here.",
+      "input": {
+        "pattern": "?.binding.yaml",
+        "name": "😀.binding.yaml"
+      },
+      "expected": {
+        "matches": true
+      }
+    },
+    {
+      "id": "binding_pattern_039_match_astral_two_questions_reject",
+      "kind": "match",
+      "description": "The converse of 038: two `?` must NOT match a single astral code point. 038 alone still passes an implementation that is wrong in the other direction; the pair pins it.",
+      "input": {
+        "pattern": "??.binding.yaml",
+        "name": "😀.binding.yaml"
+      },
+      "expected": {
+        "matches": false
+      }
+    },
+    {
+      "id": "binding_pattern_040_select_symlink_to_file_is_followed",
+      "kind": "select",
+      "requires": "symlinks",
+      "description": "A symlink whose name matches and whose TARGET is a regular file is selected. All three SDKs included symlinked files before the directory guard was added; a guard implemented with a non-following file-type check (Rust DirEntry::file_type, Node Dirent.isFile) silently drops them, which is a data-loss-shaped regression with no error. Test the target, not the link.",
+      "input": {
+        "files": [
+          "real.binding.yaml"
+        ],
+        "symlinks": {
+          "alias.binding.yaml": "real.binding.yaml"
+        },
+        "pattern": "*.binding.yaml",
+        "recursive": false
+      },
+      "expected": {
+        "selected": [
+          "alias.binding.yaml",
+          "real.binding.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_041_select_symlinked_dir_not_descended",
+      "kind": "select",
+      "requires": "symlinks",
+      "description": "The converse of 040: a symlink whose target is a DIRECTORY is neither selected nor descended into, even when recursive. Following file symlinks must not become following directory symlinks - that is where cycles and tree-escape live. The real directory is still traversed normally, so the inner file appears exactly once, under its real path.",
+      "input": {
+        "files": [
+          "a.binding.yaml",
+          "target/inner.binding.yaml"
+        ],
+        "symlinks": {
+          "link.binding.yaml": "target"
+        },
+        "pattern": "*.binding.yaml",
+        "recursive": true
+      },
+      "expected": {
+        "selected": [
+          "a.binding.yaml",
+          "target/inner.binding.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_042_select_broken_symlink_skipped_flat",
+      "kind": "select",
+      "requires": "symlinks",
+      "description": "A dangling symlink whose NAME matches is skipped, not read. The following stat that makes 040 work fails here, and the failure must be swallowed as 'not a file' rather than escaping as an uncaught IO error. Harness note: this case's symlink target intentionally does not exist - create the link anyway, do not pre-create the target.",
+      "input": {
+        "files": [
+          "a.binding.yaml"
+        ],
+        "symlinks": {
+          "dangling.binding.yaml": "does-not-exist.binding.yaml"
+        },
+        "pattern": "*.binding.yaml",
+        "recursive": false
+      },
+      "expected": {
+        "selected": [
+          "a.binding.yaml"
+        ]
+      }
+    },
+    {
+      "id": "binding_pattern_043_select_broken_symlink_skipped_recursive",
+      "kind": "select",
+      "requires": "symlinks",
+      "description": "The recursive twin of 042, and the one that actually bites. A dangling link is not a directory, so a recursive walk classifies it as a file and yields it without a type check - Python hit exactly this and died at stat() with an uncaught FileNotFoundError. Apply the file-type guard in BOTH branches, not just the flat one.",
+      "input": {
+        "files": [
+          "a.binding.yaml",
+          "nested/b.binding.yaml"
+        ],
+        "symlinks": {
+          "nested/dangling.binding.yaml": "nested/does-not-exist.binding.yaml"
+        },
+        "pattern": "*.binding.yaml",
+        "recursive": true
+      },
+      "expected": {
+        "selected": [
+          "a.binding.yaml",
+          "nested/b.binding.yaml"
+        ]
+      }
+    }
+  ]
+}

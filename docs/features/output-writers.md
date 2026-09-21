@@ -270,6 +270,38 @@ Registers scanned modules as HTTP proxy classes that forward requests to a runni
 !!! info "TypeScript-only constructor option: `fetchImpl`"
     The TypeScript constructor accepts an optional `fetchImpl?: typeof fetch` to inject a custom fetch implementation (useful for tests, edge runtimes, or proxy-aware HTTP clients). When omitted, the writer uses `globalThis.fetch` (available in Node.js 20+, browsers, Deno, and workers). If neither `options.fetchImpl` nor `globalThis.fetch` is available at construction time, the constructor throws. Python (`httpx`) and Rust (`reqwest`) inject their own HTTP clients and do not surface an equivalent option.
 
+### `auth_header_factory` Invocation Contract
+
+*Verified 2026-09-08 against the shipped 0.11.1 sources in all three SDKs. Recorded here because [`device-auth.md`](device-auth.md) depends on the answer.*
+
+The factory is invoked **once per outbound request**, from inside the proxy
+module's `execute`, not once at construction:
+
+| SDK | Call site |
+|---|---|
+| Python | `output/http_proxy_writer.py` — inside `ProxyModule.execute`, before each `httpx` call |
+| TypeScript | `output/http-proxy-writer.ts` — inside the `execute` closure, before each `fetch` |
+| Rust | `output/http_proxy_writer.rs` — inside the request-building path, before each `reqwest` send |
+
+Two consequences follow, and both matter to any credential provider wired into
+this seam:
+
+1. **A factory returning a rotating value works.** Transparent token refresh is
+   reachable without changing the writers, because a token acquired after
+   construction is picked up on the next call.
+2. **The factory is synchronous in all three SDKs.** Its return type is a plain
+   header mapping — `dict[str, str]`, `Record<string, string>`,
+   `HashMap<String, String>` — with no promise, future, or coroutine anywhere
+   in the signature. A provider that needs a network round-trip to refresh
+   therefore cannot perform it inside the factory in TypeScript or Rust. This
+   is a real constraint on any async credential source, not an oversight to
+   route around; see [`device-auth.md`](device-auth.md#open-questions) Open
+   Question 1 for the four options and the recommendation.
+
+The writers also validate the return value: a non-mapping return raises
+`TypeError` (Python) / throws `TypeError` (TypeScript) rather than being
+silently coerced or ignored.
+
 ### `metadata` Contract
 
 The writer reads the route to call from **`ScannedModule.metadata`**, never
