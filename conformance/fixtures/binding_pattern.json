@@ -1,62 +1,70 @@
 {
   "$schema": "https://apcore.dev/schemas/conformance-fixture.json",
   "title": "Binding Loader — pattern matching and selection",
-  "description": "Byte-equivalent semantics for BindingLoader.load's `pattern` argument across Python / TypeScript / Rust. Three case kinds: `validate` asserts a pattern is rejected before any filesystem access, `match` asserts the pure name matcher, and `select` asserts how `pattern` composes with `recursive` over a directory tree. Harness convention for `select`: materialize each entry of `input.files` under a temp root, creating parent directories as needed; an entry that is a strict path prefix of another entry is therefore a DIRECTORY, not a file, and must never appear in `expected.selected` (see case 034). Paths in both `files` and `selected` use '/' separators and are relative to that root; compare against the loader's results after making them relative and normalizing separators. The normative matching algorithm is specified in docs/features/binding-loader.md#normative-matching-algorithm. Tracking issue: aiperceivable/apcore-toolkit#18. Cases carrying `requires: \"symlinks\"` need symlink creation; a harness on a platform where that fails (unprivileged Windows) should SKIP them with a visible message, never silently pass them.",
+  "description": "Byte-equivalent semantics for BindingLoader.load's `pattern` argument across Python / TypeScript / Rust. Two case kinds: `match` asserts the pure name matcher, and `select` asserts how `pattern` composes with `recursive` over a directory tree. There is no `validate` kind: as of 0.12.0 every string is a valid pattern and the loader never raises on one for syntactic reasons, matching apcore 0.31.0's Algorithm A25 requirement 2. Harness convention for `select`: materialize each entry of `input.files` under a temp root, creating parent directories as needed; an entry that is a strict path prefix of another entry is therefore a DIRECTORY, not a file, and must never appear in `expected.selected` (see case 034). Paths in both `files` and `selected` use '/' separators and are relative to that root; compare against the loader's results after making them relative and normalizing separators. The normative matching algorithm is specified in docs/features/binding-loader.md#normative-matching-algorithm. Tracking issue: aiperceivable/apcore-toolkit#18. Cases carrying `requires: \"symlinks\"` need symlink creation; a harness on a platform where that fails (unprivileged Windows) should SKIP them with a visible message, never silently pass them.",
   "version": "1.0.0",
   "test_cases": [
     {
-      "id": "binding_pattern_001_validate_empty",
-      "kind": "validate",
-      "description": "An empty pattern is rejected, not treated as match-nothing or match-everything",
+      "id": "binding_pattern_001_match_empty_pattern_matches_no_real_filename",
+      "kind": "match",
+      "description": "An empty pattern is a VALID pattern that matches only the empty string, so it selects nothing. It is not an error.",
       "input": {
-        "pattern": ""
+        "pattern": "",
+        "name": "users.binding.yaml"
       },
       "expected": {
-        "error": "empty_pattern"
+        "matches": false
+      },
+      "notes": "Was a `validate` case asserting rejection until 0.12.0. apcore 0.31.0's A25 requirement 2 makes every string a valid pattern and forbids raising on one for syntactic reasons (PROTOCOL_SPEC §5.12.6 clause 6), so the loader now matches instead of refusing."
+    },
+    {
+      "id": "binding_pattern_002_match_slash_is_a_literal_so_matches_no_filename",
+      "kind": "match",
+      "description": "`/` is an ordinary literal under A25, and a filename cannot contain one, so a pattern carrying one matches nothing. Previously rejected.",
+      "input": {
+        "pattern": "sub/*.binding.yaml",
+        "name": "users.binding.yaml"
+      },
+      "expected": {
+        "matches": false
       }
     },
     {
-      "id": "binding_pattern_002_validate_forward_slash",
-      "kind": "validate",
-      "description": "A forward slash is rejected — pattern matches file names, not paths",
+      "id": "binding_pattern_003_match_globstar_prefix_matches_nothing",
+      "kind": "match",
+      "description": "`**/` is the shape a caller reaches for first when they want recursion, and it matches nothing: the two stars collapse and the `/` is a literal no filename contains. Depth is `recursive`'s job, not the pattern's.",
       "input": {
-        "pattern": "sub/*.binding.yaml"
+        "pattern": "**/*.binding.yaml",
+        "name": "users.binding.yaml"
       },
       "expected": {
-        "error": "path_separator"
-      }
+        "matches": false
+      },
+      "notes": "This case previously asserted a `path_separator` rejection, which was a genuinely useful diagnostic. A25 requirement 2 forbids it, so the diagnostic moved to documentation and the behaviour is now a silent empty result — the same answer apcore gives. Consistency with the shared config key won over the better error message; see docs/features/binding-loader.md#every-string-is-a-valid-pattern."
     },
     {
-      "id": "binding_pattern_003_validate_globstar_prefix",
-      "kind": "validate",
-      "description": "`**/` is the shape callers reach for first and is wrong here; depth is `recursive`'s job",
+      "id": "binding_pattern_004_match_backslash_is_a_literal",
+      "kind": "match",
+      "description": "A25 requirement 4 names `\\` a literal. On a filesystem where a filename may contain a backslash, a pattern carrying one MATCHES — it is not a path separator and not a syntax error.",
       "input": {
-        "pattern": "**/*.binding.yaml"
+        "pattern": "sub\\*.binding.yaml",
+        "name": "sub\\x.binding.yaml"
       },
       "expected": {
-        "error": "path_separator"
-      }
+        "matches": true
+      },
+      "notes": "The discriminating case for the 0.12.0 change: an implementation still treating `\\` as a separator rejects this pattern outright and cannot reach a match at all."
     },
     {
-      "id": "binding_pattern_004_validate_backslash",
-      "kind": "validate",
-      "description": "A backslash is rejected on every platform, not just Windows",
+      "id": "binding_pattern_005_match_trailing_slash_matches_nothing",
+      "kind": "match",
+      "description": "A trailing `/` is a literal, and no filename ends with one. Previously rejected.",
       "input": {
-        "pattern": "sub\\*.binding.yaml"
+        "pattern": "*.binding.yaml/",
+        "name": "users.binding.yaml"
       },
       "expected": {
-        "error": "path_separator"
-      }
-    },
-    {
-      "id": "binding_pattern_005_validate_trailing_slash",
-      "kind": "validate",
-      "description": "A trailing separator is still a separator",
-      "input": {
-        "pattern": "*.binding.yaml/"
-      },
-      "expected": {
-        "error": "path_separator"
+        "matches": false
       }
     },
     {
@@ -613,6 +621,23 @@
           "nested/b.binding.yaml"
         ]
       }
+    },
+    {
+      "id": "binding_pattern_044_select_globstar_pattern_yields_empty_not_an_error",
+      "kind": "select",
+      "description": "The loader MUST NOT raise on a syntactically odd pattern. `**/*.binding.yaml` over a real tree returns an empty selection, exactly as apcore does — a pattern matching no file is not an error in itself (PROTOCOL_SPEC §5.12.6 clause 6).",
+      "input": {
+        "files": [
+          "a.binding.yaml",
+          "nested/b.binding.yaml"
+        ],
+        "pattern": "**/*.binding.yaml",
+        "recursive": true
+      },
+      "expected": {
+        "selected": []
+      },
+      "notes": "Paired with case 003. 003 pins the matcher; this pins that the LOADER surfaces the empty result rather than an error, which is the half a pure-matcher case cannot see."
     }
   ]
 }

@@ -1,0 +1,262 @@
+{
+  "$schema": "https://apcore.dev/schemas/conformance-fixture.json",
+  "title": "deep_resolve_refs — $ref resolution and sibling-key merging",
+  "description": "Byte-equivalent semantics for `deep_resolve_refs(schema, doc)` across Python / TypeScript / Rust. Each case supplies a `schema` and an `openapi_doc` and asserts the fully resolved output. The sibling-merge rule (cases 003-009) was added in 0.12.0: before it, all three SDKs discarded every key sitting beside a `$ref`, including `x-sensitive`, which apcore reads off the RESOLVED schema to decide what to redact. Rule: resolve the target, walk the non-`$ref` siblings at the same depth as the node itself, then shallow-merge the siblings OVER the target, sibling winning on conflict. The 16-level depth limit is unchanged; merging adds no level of its own. Normative text: docs/features/openapi.md#ref-sibling-keys-are-preserved.",
+  "version": "1.0.0",
+  "test_cases": [
+    {
+      "id": "ref_resolution_001_plain_ref_no_siblings",
+      "description": "The pre-0.12.0 behaviour is unchanged when a $ref has no siblings. Regression guard: the merge must not perturb the ordinary case.",
+      "input": {
+        "schema": {
+          "$ref": "#/components/schemas/Token"
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {
+              "Token": {
+                "type": "object",
+                "properties": {
+                  "v": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "id": "ref_resolution_002_no_ref_at_all",
+      "description": "A schema with no $ref anywhere is returned structurally unchanged.",
+      "input": {
+        "schema": {
+          "type": "string",
+          "x-sensitive": true,
+          "description": "d"
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {}
+          }
+        }
+      },
+      "expected": {
+        "type": "string",
+        "x-sensitive": true,
+        "description": "d"
+      }
+    },
+    {
+      "id": "ref_resolution_003_sibling_x_sensitive_preserved",
+      "description": "THE SECURITY CASE. `x-sensitive` written beside a $ref survives resolution. apcore reads it off the resolved schema (PROTOCOL_SPEC §10.6); dropping it here means the credential reaches apcore with nothing to redact on and is logged in plaintext. apcore closed the same hole in its own resolver as D-98 in 0.31.0.",
+      "input": {
+        "schema": {
+          "$ref": "#/components/schemas/Token",
+          "x-sensitive": true
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {
+              "Token": {
+                "type": "object",
+                "properties": {
+                  "v": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "type": "string"
+          }
+        },
+        "x-sensitive": true
+      }
+    },
+    {
+      "id": "ref_resolution_004_sibling_description_preserved",
+      "description": "The merge is NOT limited to `x-` extension keys. Restricting it to the one symptom that was noticed would leave `description`, `title` and `deprecated` silently dropped.",
+      "input": {
+        "schema": {
+          "$ref": "#/components/schemas/Token",
+          "description": "the caller's own wording",
+          "deprecated": true
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {
+              "Token": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "type": "object",
+        "description": "the caller's own wording",
+        "deprecated": true
+      }
+    },
+    {
+      "id": "ref_resolution_005_sibling_wins_on_conflict",
+      "description": "On a key present in both, the SIBLING wins — it is the more specific, author-written value. The referenced schema is the default; the sibling is the override.",
+      "input": {
+        "schema": {
+          "$ref": "#/components/schemas/Token",
+          "description": "local"
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {
+              "Token": {
+                "type": "object",
+                "description": "shared"
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "type": "object",
+        "description": "local"
+      }
+    },
+    {
+      "id": "ref_resolution_006_unresolvable_ref_keeps_siblings",
+      "description": "A $ref that does not resolve still contributes its siblings, so the result is the sibling set rather than an empty object. Losing `x-sensitive` because a reference was mistyped is the worst possible combination of two faults.",
+      "input": {
+        "schema": {
+          "$ref": "#/components/schemas/Missing",
+          "x-sensitive": true
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {}
+          }
+        }
+      },
+      "expected": {
+        "x-sensitive": true
+      }
+    },
+    {
+      "id": "ref_resolution_007_sibling_is_itself_resolved",
+      "description": "A sibling carrying its own nested $ref is walked like any other subtree — the merge does not smuggle unresolved references past the resolver.",
+      "input": {
+        "schema": {
+          "$ref": "#/components/schemas/Base",
+          "properties": {
+            "extra": {
+              "$ref": "#/components/schemas/Extra"
+            }
+          }
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {
+              "Base": {
+                "type": "object"
+              },
+              "Extra": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "type": "object",
+        "properties": {
+          "extra": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    {
+      "id": "ref_resolution_008_sibling_inside_properties",
+      "description": "The rule applies at every depth, not only at the root — this is the shape an OpenAPI document actually produces, where the marked field is a property.",
+      "input": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "secret": {
+              "$ref": "#/components/schemas/Token",
+              "x-sensitive": true
+            },
+            "plain": {
+              "type": "string"
+            }
+          }
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {
+              "Token": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string",
+            "x-sensitive": true
+          },
+          "plain": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "id": "ref_resolution_009_chained_ref_carries_siblings_from_each_hop",
+      "description": "When a $ref resolves to another $ref, siblings contributed at each hop all survive, with the outermost winning — the same precedence as a single hop, applied transitively.",
+      "input": {
+        "schema": {
+          "$ref": "#/components/schemas/Outer",
+          "x-sensitive": true
+        },
+        "openapi_doc": {
+          "components": {
+            "schemas": {
+              "Outer": {
+                "$ref": "#/components/schemas/Inner",
+                "title": "from outer"
+              },
+              "Inner": {
+                "type": "string",
+                "title": "from inner"
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "type": "string",
+        "title": "from outer",
+        "x-sensitive": true
+      }
+    }
+  ]
+}

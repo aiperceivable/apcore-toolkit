@@ -245,7 +245,7 @@ For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer
 
 ### Errors
 - Framework-specific — subclass defines error behavior
-- `re.error` (Python) / `Error` (TypeScript) — if `include`/`exclude` kwargs are forwarded to `filter_modules` with invalid patterns
+- `ValueError` (Python) / `Error` (TypeScript) — if `include`/`exclude` kwargs are forwarded to `filter_modules` with invalid patterns. Python's `filter_modules` catches the underlying `re.error` and re-raises `ValueError` (see [Contract: BaseScanner.filter_modules](#contract-basescannerfilter_modules)); `re.error` does not subclass `ValueError`, so a caller catching `re.error` here would not catch what is actually raised.
 
 ### Returns
 - On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>` — all discovered modules after filtering and deduplication
@@ -402,7 +402,7 @@ N/A — data classes are not called and do not return values.
 - None raised
 
 ### Returns
-- On success: `dict[str, Any]` / `Record<string, unknown>` with snake_case keys suitable for YAML/JSON serialization; `None`/`null` fields omitted; annotations serialized via `annotations_to_dict`
+- On success: `dict[str, Any]` / `Record<string, unknown>` with snake_case keys suitable for YAML/JSON serialization. **Every field is always present in the output — `None`/`null` fields are never omitted.** Verified against all three SDKs (`apcore-toolkit-python/src/apcore_toolkit/serializers.py:53-68`, `apcore-toolkit-rust/src/serializers.rs:35-60`, `apcore-toolkit-typescript/src/serializers.ts:37-58`): each emits the same fixed key set on every call, using `null`/`None` for any optional field that is unset (e.g. `documentation`, `display`) rather than dropping the key. This is deliberate, not an oversight — Rust's own implementation comment notes it exists to produce a **stable cross-SDK wire format** with a predictable key set, unlike `serde_json::to_value(&module)`, which (via `#[serde(skip_serializing_if = "Option::is_none")]`) would omit unset optionals and vary the key set between records. `annotations` is serialized via `annotations_to_dict` (itself `None`/`null` when the module carries no annotations).
 
 ### Properties
 - pure: true

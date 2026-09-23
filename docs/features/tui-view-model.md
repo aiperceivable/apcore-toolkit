@@ -434,6 +434,289 @@ let canonical_json: String = format_view_model(&vm);
 
 ---
 
+## Contract: TuiViewModel
+
+### Inputs
+N/A — this is a data type, not a callable function. Produced by [`modules_to_view_model`](#contract-modules_to_view_model) and consumed by [`format_view_model`](#contract-format_view_model) and by each SDK's Tier-2 renderer.
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — always built via `modules_to_view_model(...)`, never constructed directly by consumers
+- TypeScript: `interface TuiViewModel` — a plain object shape, likewise always produced by `modulesToViewModel(...)`
+- Rust: `struct TuiViewModel` — produced by `modules_to_view_model(...)`
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `schema_version` | integer | yes | `1` for V1. Renderers fall back to plain `"text"` cell rendering on unknown future `Cell.kind` / `Tone` values rather than erroring. |
+| `kind` | string enum | yes | `"list"` \| `"grouped"`. `"detail"` is reserved for a future `TuiDetailViewModel`. |
+| `title` | string | optional | Header text for the rendered view. Omitted from the canonical encoding when absent — never emitted as `null`. |
+| `columns` | array of [`Column`](#contract-column) | yes | Ordered; defines render order and index-based lookup into each `Row.cells`. May be empty (there is no built-in default column set). |
+| `rows` | array of [`Row`](#contract-row) | yes | Pre-filtered, pre-sorted by the toolkit (or by the caller, for usage-based sort keys — see [Sort/Filter Execution Model](#sortfilter-execution-model)). Renderers MUST NOT re-order. |
+| `groups` | array of [`Group`](#contract-group) | optional | Present only when `kind == "grouped"`. Omitted (never an empty array) when absent. |
+| `sort` | [`Sort`](#contract-sort) | optional | Annotates which sort the toolkit applied or was asked to apply. Omitted when no sort was requested. |
+| `filter` | [`Filter`](#contract-filter) | optional | Annotates which filter the toolkit applied. Omitted when no filter. |
+| `tone_palettes` | array of [`TonePalette`](#contract-tonepalette) | optional | Referenced by `Column.tone_by`. Omitted when no column uses tone. |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- camelCase field names in TypeScript; snake_case in Python and Rust
+- pure data: never carries a callable, a file handle, or any other non-serializable value — the whole point is that `format_view_model(vm)` is a pure, byte-identical encoding across all three SDKs
+- schema-versioned: new *optional* fields on any of the nine types below are non-breaking; renaming or removing an existing field is breaking and requires a `schema_version` bump (Decision 5)
+
+---
+
+## Contract: Column
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — `Column(key=..., label=..., justify="left", tone_by=None)`
+- TypeScript: `interface Column` — plain object literal
+- Rust: `struct Column` — struct literal
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `key` | string | yes | Stable identifier. Matches a `Row.cells` entry **by index**, not by key — `row.cells[i]` corresponds to `columns[i]`. |
+| `label` | string | yes | Header text for the rendered column. |
+| `justify` | string enum | optional | `"left"` (default) \| `"right"` \| `"center"`. Omitted when `"left"`. |
+| `tone_by` | string | optional | References a [`TonePalette`](#contract-tonepalette).`name`. Omitted when no tone applies to the column. |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- ordering is significant: `columns` array order fixes render order and the position every `Row.cells` array must align to
+
+---
+
+## Contract: Row
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — `Row(cells=[...], tags=[...])`
+- TypeScript: `interface Row` — plain object literal
+- Rust: `struct Row` — struct literal
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `cells` | array of [`Cell`](#contract-cell) | yes | Position-indexed: `cells[i]` corresponds to `columns[i]`. Length MUST equal `columns.length`. |
+| `tags` | array of strings | optional | Consulted by a `tone_by` palette's `tag_equals` rule. Omitted when empty. |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- invariant enforced by the builder, not by the type system: `len(cells) == len(columns)` for every row in a given `TuiViewModel`
+
+---
+
+## Contract: Cell
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Discriminated union on `kind`, in all three SDKs (Python via a tagged `@dataclass` hierarchy or literal-typed field, TypeScript via a discriminated `interface` union, Rust via a tagged `enum`) — never a single flat struct with all variants' fields present at once.
+
+### Fields
+
+`Cell` carries a `kind` discriminant plus kind-specific fields:
+
+| `kind` | Additional fields | Notes |
+|---|---|---|
+| `"text"` | `value: string` | Plain text. The only kind an unrecognised `Column` key degrades to (see [`modules_to_view_model`](#contract-modules_to_view_model) Errors: an unknown column key renders as an empty `"text"` cell rather than raising). |
+| `"tags"` | `values: array of strings` | Renderer joins with an idiomatic separator; not joined by the toolkit itself. |
+| `"badge"` | `value: string`, `tone?: Tone` | Short label; renderer may box or highlight it. |
+| `"symbol"` | `value: string` (one of `"check"`, `"cross"`, `"warning"`, `"circle"`), `tone?: Tone` | Renderer chooses the glyph (✓ / ✗ / ⚠ / ○) or an ASCII fallback — the wire format carries the symbolic name, never the glyph itself. |
+
+`Tone`, referenced by `"badge"` and `"symbol"`, is one of exactly five values: `"neutral"` \| `"positive"` \| `"negative"` \| `"warning"` \| `"info"` (Decision 1 — locked for V1; see [Tone](#tone-semantic-not-visual)).
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- exhaustive union: exactly 4 `kind` values in V1 (Decision 2 — locked, no `"json"` or `"link"` kind); renderers MUST tolerate an unrecognised future `kind` by falling back to plain-text rendering rather than erroring, per the schema-versioning policy (Decision 5)
+- no floats, ever: numeric-looking cell content is pre-formatted to a string by the builder before it reaches a `Cell`, avoiding cross-language float-rendering divergence
+- no raw color: `tone` is a semantic value (`Tone`), never an ANSI code, RGB hex, or library-specific style string — that mapping is a Tier-2 renderer concern
+
+---
+
+## Contract: Sort
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — `Sort(key="module_id", direction="asc")`
+- TypeScript: `interface Sort` — `{ key, direction }`
+- Rust: `struct Sort` — struct literal, `direction: Direction` (`Direction::Asc` / `Direction::Desc`)
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `key` | string | yes | Must match a `columns[].key` in V1's allowed set: `module_id`, `alias`, `description`. Other keys (`calls`, `errors`, `latency`) may appear here — annotating what the caller requested — but the toolkit does not execute that ordering itself; see [Sort/Filter Execution Model](#sortfilter-execution-model). |
+| `direction` | string enum | yes | `"asc"` \| `"desc"`. |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- annotation only for non-toolkit-executed keys: `sort` always records what was *requested*, regardless of whether the toolkit or the caller actually produced the row order
+
+---
+
+## Contract: Filter
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — `Filter(tags=(...), search="", annotations=(...), exposure="all", deprecated=True)`
+- TypeScript: `interface Filter` — plain object literal
+- Rust: `struct Filter` — struct literal, `exposure: Exposure` enum
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `tags` | array of strings | yes (may be empty) | AND-filter — a module must carry every listed tag. |
+| `search` | string | yes (may be empty) | Case-insensitive substring match over `module_id` + `description`. |
+| `annotations` | array of strings | yes (may be empty) | Names of `ModuleAnnotations` flag fields that must be `true`. |
+| `exposure` | string enum | yes | `"exposed"` \| `"hidden"` \| `"all"`. |
+| `deprecated` | boolean | yes | When `false`, modules with `annotations.deprecated == true` are excluded. |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- required-but-empty, deliberately: empty strings and empty arrays are emitted in the canonical encoding (never omitted, never `null`) so that "a filter was applied with an empty value" stays distinguishable from "no filter field annotation at all" (the enclosing `TuiViewModel.filter` itself is what gets omitted when no filter was requested)
+
+---
+
+## Contract: TonePalette
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — `TonePalette(name="tag_palette", rules=[...])`
+- TypeScript: `interface TonePalette` — plain object literal
+- Rust: `struct TonePalette` — struct literal
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | yes | Referenced by a [`Column`](#contract-column).`tone_by`. |
+| `rules` | array of [`ToneRule`](#contract-tonerule) | yes | Evaluated in array order; **first match wins**. |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- V1 wiring note: the builder wires only the **first** supplied palette's `name` to the `"tags"` column's `tone_by` — there is no per-column palette-selection parameter yet (see [`modules_to_view_model`](#contract-modules_to_view_model) Inputs)
+
+---
+
+## Contract: ToneRule
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — `ToneRule(match={"kind": "tag_equals", "value": "deprecated"}, tone="warning")`
+- TypeScript: `interface ToneRule` — plain object literal
+- Rust: `struct ToneRule` — struct literal
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `match` | object | yes | V1 supports exactly one shape: `{ "kind": "tag_equals", "value": "<tag>" }`. Other `match.kind` values are reserved for future schema-version bumps. |
+| `tone` | `Tone` enum | yes | One of the five values in [Tone](#tone-semantic-not-visual). |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- narrow by design: `tag_equals` is the only rule kind demonstrated by existing CLI behaviour (see Risks — "`TonePalette` design too narrow"); additional `match.kind` variants are additive and non-breaking under Decision 5
+
+---
+
+## Contract: Group
+
+### Inputs
+N/A — this is a data type, not a callable function. See [`TuiViewModel`](#contract-tuiviewmodel).
+
+### Errors
+N/A — data types are not called and do not raise secondary exceptions.
+
+### Returns
+N/A — data types are not called and do not return values.
+
+### Construction
+- Python: `@dataclass` — `Group(label="users", row_indices=[0, 2, 5])`
+- TypeScript: `interface Group` — plain object literal
+- Rust: `struct Group` — struct literal, `row_indices: Vec<usize>`
+
+### Fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `label` | string | yes | Group header text. |
+| `row_indices` | array of integers | yes | Indices into the **top-level** `TuiViewModel.rows` array, not a nested copy of the rows themselves. |
+
+### Properties
+- immutable by convention (Python/TypeScript); owned value (Rust)
+- present only when `kind == "grouped"`: `TuiViewModel.groups` is omitted entirely for `kind == "list"`
+- renderer contract: a renderer iterates groups in array order, and within each group iterates `row_indices` in the order given; a row not referenced by **any** group's `row_indices` is not rendered at all — grouping is a projection, not a guaranteed partition of `rows`
+- index validity: every value in `row_indices` MUST be a valid index into `rows`; the same row index MAY appear in more than one group (e.g. `group_by: "tag"` when a module carries multiple tags)
+
+---
+
 ## Conformance Corpus
 
 A shared corpus lives at `apcore-toolkit/conformance/fixtures/view_model.json`,

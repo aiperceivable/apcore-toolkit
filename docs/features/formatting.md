@@ -211,21 +211,21 @@ This three-rule alignment (default-comparison + alphabetical + lowercase bool) i
 ## Contract: enrich_schema_descriptions
 
 ### Inputs
-- `schema`: dict / `Record<string, unknown>`, required — a JSON Schema object with a `"properties"` key; mutated in place
-- `descriptions`: dict[str, str] / `Record<string, string>`, required — mapping of property name → description to inject
+- `schema`: dict / `Record<string, unknown>`, required — a JSON Schema object with a `"properties"` key; **never mutated** (see Returns)
+- `descriptions` (`param_descriptions` in Python/Rust, `paramDescriptions` in TypeScript): dict[str, str] / `Record<string, string>`, required — mapping of property name → description to inject
+- `overwrite`: bool, optional, default `false` — when true, replaces existing `"description"` fields instead of only filling in missing ones
 
 ### Errors
-- None raised — silently skips properties not found in `schema.properties`
+- None raised in the ordinary case — silently skips properties not found in `schema.properties`. TypeScript additionally throws a plain `Error` if `schema` is not cloneable via `structuredClone` (e.g. it contains a function or other non-serializable value).
 
 ### Returns
-- Python/Rust: `None` — schema is mutated in place
-- TypeScript: `void` — schema is mutated in place
+- On success: an **enriched schema**, same shape as the input — verified against all three SDKs (`apcore-toolkit-python/src/apcore_toolkit/schema_utils.py:45-52`, `apcore-toolkit-rust/src/schema_utils.rs:17-46`, `apcore-toolkit-typescript/src/schema-utils.ts:26-48`), none of which mutate `schema`. **The input `schema` is never mutated; this function always returns a value, never `None`/`void`.** When at least one description is actually merged in, all three SDKs build and return a **new, independent deep copy** (Python `copy.deepcopy`, Rust `Value::clone`, TypeScript `structuredClone`) with the descriptions applied. As a fast path, when `descriptions` is empty or `schema` has no (non-empty) `"properties"` key, the original `schema` value/reference is returned as-is, unmodified — never copied *and* never edited in place.
 
 ### Properties
 - async: false
-- pure: false (mutates the schema dict in place)
-- overwrite_safe: true — existing `"description"` fields are NOT overwritten (only missing descriptions are filled in)
-- thread_safe: true (assuming no concurrent mutation of the same schema dict)
+- pure: true — the input `schema` is never mutated; calling this function has no observable side effect on any value the caller already holds
+- overwrite_safe: true — existing `"description"` fields are NOT overwritten by default (only missing descriptions are filled in); pass `overwrite: true` to replace them
+- thread_safe: true — since the input is never mutated, concurrent calls sharing the same `schema` are safe
 
 ---
 

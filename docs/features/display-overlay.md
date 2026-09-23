@@ -274,10 +274,10 @@ To feed `DisplayResolver` from `ScannedModule.display`, pass it explicitly via `
 
 ### Errors
 - `ValueError` (Python) / `Error` (TypeScript) / `Err(DisplayResolverError)` (Rust) — raised **only** when MCP alias validation fails (e.g., aliases collide, alias does not match a module, or an alias would shadow another module's `module_id`).
-- Invalid binding-data shape (e.g., `binding_data` is not a dict, `bindings` is not a list, or `binding_path` points to malformed YAML) is **not** raised. All three SDKs log a warning and continue with an empty binding map; the returned modules then have `display=None`. Callers that want fail-fast on shape errors should validate `binding_data` themselves before calling `resolve`.
+- Invalid binding-data shape (e.g., `binding_data` is not a dict, `bindings` is not a list, or `binding_path` points to malformed YAML) is **not** raised. All three SDKs log a warning and continue with an empty binding map. `display` is still populated on every returned module in this case — see Returns below — using only the computed defaults, since there is no overlay data to layer on top of them. Callers that want fail-fast on shape errors should validate `binding_data` themselves before calling `resolve`.
 
 ### Returns
-- On success: list of `ScannedModule` with `.display` fields populated where overlay data was found; modules without matching overlay data have `display=None`
+- On success: list of `ScannedModule` with `.display` **always** populated — verified against all three independent SDK implementations (Python `resolver.py:203-217`, Rust `resolver.rs:269-273`, TypeScript `resolver.ts:268-283`), which unconditionally build and assign a `display` object for every module. When binding-overlay data matches, `display` reflects the resolved overlay (`display.alias > binding alias > suggested_alias > module_id`, per the [Resolution Chain](#resolution-chain)); when no overlay entry matches (or none was supplied), `display` is still populated, falling back to the scanner-derived `module_id` / `description` / `tags` as computed defaults for `alias`, `description`, and `tags` respectively. **`display` is never `None`/`null` in practice** — this corrects an earlier version of this contract, which incorrectly stated that modules without matching overlay data have `display=None`.
 
 ### Properties
 - async: false

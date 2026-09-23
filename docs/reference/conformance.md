@@ -17,6 +17,7 @@ The shared conformance fixtures currently cover:
 | OpenAPI scanning | `conformance/fixtures/openapi_scan.json` | One module per operation and stable module-ID derivation |
 | TUI view model | `conformance/fixtures/view_model.json` | Columns, rows, grouping, filtering, sorting, and tone metadata |
 | Device authorization flow | `conformance/fixtures/device_auth.json` | RFC 8628 polling state machine, token lifecycle, provider-compatibility normalisation, and discovery URL construction |
+| `$ref` resolution | `conformance/fixtures/ref_resolution.json` | `$ref` inlining and sibling-key merging — carries `x-sensitive` through to the schema apcore redacts on |
 | Binding pattern | `conformance/fixtures/binding_pattern.json` | `BindingLoader.load` name-matching syntax, rejected patterns, and composition with `recursive` |
 | Display overlay | `conformance/fixtures/display_resolve.json` | Portable display metadata resolution |
 | CSV / JSONL | `conformance/fixtures/format_csv.json`, `format_jsonl.json` | Canonical text output and line-ending rules |

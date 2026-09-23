@@ -82,7 +82,7 @@ The toolkit already ships the hard part of OpenAPI handling — the
 |---|---|
 | `extract_input_schema(op, doc)` | Merges path + query + body params into one flat JSON Schema |
 | `extract_output_schema(op, doc)` | Pulls the `200`/`201` response schema |
-| `deep_resolve_refs(schema, doc)` | Recursively inlines `$ref`, depth-limited to 16 |
+| `deep_resolve_refs(schema, doc)` | Recursively inlines `$ref`, merging any sibling keys over the target (sibling wins — carries `x-sensitive` through); depth-limited to 16 |
 | `infer_annotations_from_method(method)` | Maps HTTP verb → `ModuleAnnotations` (canonical, RFC 9110-derived) |
 
 What is missing is only the **document-level** layer above them: the traversal

@@ -162,36 +162,42 @@ in a different language:
   apply Unicode normalization, and neither should the caller silently: a name
   comes from the filesystem in whatever form the filesystem stores it.
 
-### Rejected patterns
+### Every string is a valid pattern
 
-Validated **before** any filesystem access, so an invalid pattern is a
-diagnostic rather than a silently empty result:
+*Changed in 0.12.0, to track apcore 0.31.0.*
 
-| Pattern | Outcome |
-|---|---|
-| `""` (empty) | `BindingLoadError` — `pattern must not be empty` |
-| Contains `/` or `\` | `BindingLoadError` — `pattern matches file names only; use recursive=True to descend into subdirectories` |
+`load` **never raises on `pattern` for syntactic reasons.** `a[b`, `{x,y}`,
+`**`, an empty string, and a value containing `/` or `\` are all valid
+patterns whose brackets, braces, extra star and separators are literals. A
+pattern matching no file yields no modules, which is not an error in itself.
 
-The second rule is what makes `**/*.binding.yaml` an error rather than a
-mystery. It is the shape a caller reaches for first, and it is wrong here:
-depth is `recursive`'s job.
+This is apcore's rule, adopted verbatim: `PROTOCOL_SPEC` §9.2.3 Algorithm A25
+requirement 2, and §5.12.6 clause 6 stating it for `bindings.pattern`
+specifically.
 
-**Message wording is idiomatic per SDK; the *identifier* is not.** The
-conformance corpus asserts the stable identifiers `empty_pattern` and
-`path_separator`, so each SDK maps its own error to one of those two and is
-otherwise free to phrase the human-readable reason naturally. Rust carries them
-as a dedicated `BindingLoadError::InvalidPattern { pattern, reason }` variant
-rather than overloading an existing one; Python and TypeScript raise/throw the
-existing `BindingLoadError` with the reason set.
+!!! note "This reverses the 0.12.0 behaviour, and the reason is worth recording"
+    0.12.0 rejected an empty pattern and any pattern containing `/` or `\`,
+    which made `**/*.binding.yaml` — the shape a caller reaches for first when
+    they want recursion — a clear error pointing at `recursive=True` instead of
+    a silently empty result. That was the better diagnostic, and it is gone.
 
-The identifiers are **corpus vocabulary, not public API.** Each SDK's
-conformance harness maps its own reason text onto them; no caller can read
-`empty_pattern` off a thrown error. That is a deliberate scope limit, not an
-oversight — Python and TypeScript expose a single `BindingLoadError` with no
-machine-readable discriminator for *any* failure kind, so giving `pattern`
-errors one alone would be an inconsistent half-measure, and giving every error
-kind one is its own change. Rust callers can already discriminate by matching
-`InvalidPattern`. A cross-SDK error-code field is worth its own issue.
+    It was given up because the whole reason this parameter exists is to let a
+    caller honour apcore's `bindings.pattern` (see the section opening). A
+    caller that resolves the key from `Config` and hands the same string to
+    both components must get the same answer from both; under 0.12.0, apcore
+    matched nothing and the toolkit raised. Two components reading one
+    configuration key and disagreeing is precisely the failure
+    [#18](https://github.com/aiperceivable/apcore-toolkit/issues/18) was filed
+    to close, and keeping a nicer error message at the price of reopening it
+    was the wrong trade.
+
+    The diagnostic now lives here rather than in an exception: **if a pattern
+    selects nothing and it contains `/`, you probably wanted `recursive=True`.**
+
+`\` deserves its own mention because it is the one that looks like a bug: A25
+requirement 4 names it a literal, so on a filesystem where a filename may
+contain a backslash, `sub\*.binding.yaml` genuinely matches `sub\x.binding.yaml`.
+It is not a path separator here.
 
 ### Composition with `recursive`
 
@@ -213,23 +219,17 @@ pattern through those two shapes unchanged would have produced three different
 answers for `recursive=True`; specifying `pattern` as a name matcher removes
 the composition question entirely.
 
-### Ignored for single files — but still validated
+### Ignored for single files
 
 When `path` names a file, `pattern` is ignored for **matching**. A caller that
 explicitly names one file has already made the selection; the loader does not
 second-guess it, and `load("odd-name.yaml")` still works.
 
-**Validation is not part of what gets ignored.** It runs first, as a pure
-precondition on the argument, before the file/directory check and before any
-`stat`. So `load("one.binding.yaml", pattern="**/*.yaml")` raises, and an
-invalid pattern also outranks a non-existent path. The two rules read as
-contradictory otherwise — you cannot know a path is a file without touching the
-filesystem — and this ordering is the resolution: *"ignored for single files"*
-governs matching only.
-
-The reason to prefer this over silently ignoring a malformed pattern: a bad
-argument is a bad argument regardless of what else was passed, and the
-alternative makes the same call raise or not depending on filesystem state.
+*0.12.0 additionally validated the pattern here, ahead of the file/directory
+check, so that a malformed one raised even for a single-file path. That was
+dropped before release — validation is gone entirely — see
+[Every string is a valid pattern](#every-string-is-a-valid-pattern) — so there
+is nothing left to order, and "ignored" now simply means ignored.*
 
 ### Directories are never candidates
 
@@ -334,7 +334,7 @@ The top-level `spec_version` field is advisory:
 
 The error carries `file_path`/`module_id`/`missing_fields` plus a human-readable `reason` in Python; TypeScript exposes the same data as camelCase fields `filePath`/`moduleId`/`missingFields`/`reason` on `BindingLoadError extends Error`.
 
-In Rust the error is an enum (`thiserror`-derived) with 8 variants — `PathNotFound`, `FileRead`, `YamlParse`, `MissingFields`, `InvalidStructure`, `FileTooLarge`, `TooManyFiles`, `InvalidPattern` — carrying per-variant payloads; callers pattern-match to recover structured information. `FileTooLarge` and `TooManyFiles` are safety caps introduced in 0.5.0 (see [Safety Caps](#safety-caps-rust-only) below); `InvalidPattern { pattern, reason }` arrived with [Pattern Matching](#pattern-matching) in 0.12.0.
+In Rust the error is an enum (`thiserror`-derived) with 7 variants — `PathNotFound`, `FileRead`, `YamlParse`, `MissingFields`, `InvalidStructure`, `FileTooLarge`, `TooManyFiles` — carrying per-variant payloads; callers pattern-match to recover structured information. The final two are safety caps introduced in 0.5.0 (see [Safety Caps](#safety-caps-rust-only) below). An `InvalidPattern` variant existed in an unreleased draft of this work and was withdrawn before 0.12.0 shipped: a pattern can no longer be invalid (see [Every string is a valid pattern](#every-string-is-a-valid-pattern)).
 
 ## Safety Caps (Rust only)
 
@@ -474,9 +474,16 @@ N/A — exception classes are not called and do not return values.
 |-----|------|-------|
 | Python | `class BindingLoadError(Exception)` | Single class with all 4 fields as attributes |
 | TypeScript | `class BindingLoadError extends Error` | Same 4 fields as camelCase properties |
-| Rust | `enum BindingLoadError` (`thiserror`) | 8 variants: `PathNotFound { path }`, `FileRead { path, source }`, `YamlParse { path, source }`, `MissingFields { path: Option<String>, module_id: Option<String>, missing_fields: Vec<String> }`, `InvalidStructure { path: Option<String>, reason: String }`, `FileTooLarge { path, size, max }`, `TooManyFiles { path, max }`, `InvalidPattern { pattern: String, reason: String }` |
+| Rust | `enum BindingLoadError` (`thiserror`) | 7 variants: `PathNotFound { path }`, `FileRead { path, source }`, `YamlParse { path, source }`, `MissingFields { path: Option<String>, module_id: Option<String>, missing_fields: Vec<String> }`, `InvalidStructure { path: Option<String>, reason: String }`, `FileTooLarge { path, size, max }`, `TooManyFiles { path, max }` |
 
 Rust callers pattern-match on the variant to recover structured information. Python/TypeScript callers access fields directly.
+
+### Properties
+- Python: a plain `class BindingLoadError(Exception)` — a data-carrying exception, not a dataclass; instantiated and raised by `BindingLoader`/`ConventionScanner` internals, never constructed by callers for their own use
+- TypeScript: a plain `class BindingLoadError extends Error` — same shape and the same caller relationship as Python's
+- Rust: a `thiserror`-derived `enum`, not an exception — errors are returned via `Result<_, BindingLoadError>` rather than thrown; each of the 7 variants carries only the fields relevant to that failure mode, so `missing_fields` (for example) exists only on the `MissingFields` variant rather than as an always-present-but-often-empty field the way Python/TypeScript's single-class shape requires
+- immutable once constructed, in all three SDKs
+- this Python/TypeScript-vs-Rust shape difference (one class with 4 always-present fields vs. a 7-variant enum) is intentional, not a divergence to reconcile — see [Cross-SDK Shape](#cross-sdk-shape) above
 
 ---
 
@@ -506,7 +513,6 @@ Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — 
 
 ### Errors
 - `BindingLoadError` / `BindingLoadError` (Python raises, Rust returns `Err`) — path not found, YAML parse failure, or strict mode violation
-- `BindingLoadError` — `pattern` is empty or contains a path separator; raised before any filesystem access
 - `BindingLoadError::FileRead` (Rust) — any OS/IO error on the *root* path; per-entry errors during recursive traversal are governed by the policy below
 - `BindingLoadError` (Python) — OS errors on the root path wrapping `IOError`/`OSError` raise immediately
 

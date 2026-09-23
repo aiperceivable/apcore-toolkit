@@ -4,21 +4,25 @@ description: "PROPOSED (not implemented) RFC 8628 Device Authorization Flow clie
 
 # Device Authorization Flow — V1 Proposal
 
-!!! info "Status: ACCEPTED — design settled, no code written"
-    Both blocking prerequisites are resolved (2026-09-08) and every open
-    question has a recorded decision, so this document is no longer a
-    proposal awaiting a verdict — it is an accepted design awaiting
-    implementation capacity. **Nothing ships against it yet.** It is the
-    relocated, re-scoped form of a proposal originally filed against
-    `apcore-cli` as "Standardized RFC 8628 (Device Authorization Flow) for
-    CLI Authentication".
+!!! success "Status: IMPLEMENTED — shipped in 0.12.0"
+    `DeviceAuthClient`, `DeviceAuthConfig`, `TokenSet`, `TokenStore` /
+    `FileTokenStore`, `Grant` / `DeviceCodeGrant` and the four extension hooks
+    ship in `apcore-toolkit-{python,typescript,rust}` 0.12.0, asserted
+    behaviourally equivalent by the shared 65-case corpus below. Rust gates it
+    behind a `device-auth` cargo feature. **Phase 3 — the terminal UI half in
+    `apcore-cli-*` — has not started**; the toolkit still writes nothing to a
+    terminal, by design.
+
+    This document is the relocated, re-scoped form of a proposal originally
+    filed against `apcore-cli` as "Standardized RFC 8628 (Device Authorization
+    Flow) for CLI Authentication".
 
     | | |
     |---|---|
     | **Author** | apcore-toolkit maintainers |
     | **First drafted** | 2026-09-03 |
     | **Accepted** | 2026-09-08 |
-    | **Target release** | 0.13.0 (earliest) — deliberately *not* bundled with the 0.12.0 `BindingLoader.pattern` work |
+    | **Released in** | 0.12.0 |
     | **Tracking issue** | [aiperceivable/apcore-toolkit#17](https://github.com/aiperceivable/apcore-toolkit/issues/17) |
     | **Depends on** | [`output-writers.md`](output-writers.md#auth_header_factory-invocation-contract) — the integration point, shipped, and its invocation contract now verified |
     | **Affects** | `apcore-cli-{python,typescript,rust}` (terminal UI half, separate PRs) · `apexe` (credential-baseline note, see [Downstream Impact](#downstream-impact)) |
@@ -1725,6 +1729,55 @@ that regresses.
 
 ---
 
+## Contract: DeviceAuthClient.refresh
+
+### Inputs
+- `tokens`: `TokenSet`, optional (Python, TypeScript only) — the credential to refresh. When omitted, the current credential is loaded from the configured store via the client's store key. **Rust has no optional-token parameter** — `refresh()` always loads the currently stored credential; there is no override.
+
+### Errors
+- `NoCredentialError` — nothing is stored for this client's key, or the stored/supplied credential carries no `refresh_token`
+- `RefreshFailedError` — the server rejected the exchange with the literal, **never-aliased** identifier `invalid_grant`; the store is cleared as a side effect and a fresh `login()` is required
+- `AuthorizationProtocolError` — any other non-2xx response, or a response whose body carries no recognisable error identifier; carries the raw response body and HTTP status
+- Transport errors propagate (Rust surfaces them as `DeviceAuthError::Transport`; Python/TypeScript propagate the underlying HTTP-client exception) — unlike polling, there is no deadline here to bound retries
+- **`error_aliases` is deliberately NOT applied on this path** *(specified 2026-09-08)*. The identifier is read through `field_aliases` only (locating a non-standard field name such as `error_code`), never through `error_aliases` (remapping the identifier's value) — so a consumer who opted into `invalid_grant` → `expired_token` for the device-code path still gets the terminal store-clearing rule here, rather than that alias silently disabling it
+
+### Returns
+- On success: a new `TokenSet`, already persisted to the configured store. The entire stored record is **replaced wholesale** — rotation is assumed, so a new access token is never merged into the old record, which would leave in place a refresh token the server has already invalidated
+
+### Properties
+- async: false (Python) / true (TypeScript, Rust)
+- pure: false — network I/O, and a store write on both success and on a terminal `invalid_grant` failure
+- idempotent: false — each call spends the current refresh token; a provider implementing rotation invalidates it, so two concurrent calls from the same starting state cannot both succeed (see [Concurrency](#concurrency))
+
+---
+
+## Contract: DeviceAuthClient.as_auth_header_factory
+
+### Inputs
+- Python: `header_name`: string, optional, keyword-only, default `"Authorization"`; `value_template`: string, optional, keyword-only, default `"{token_type} {access_token}"`
+- TypeScript: `options.skewSeconds`: number, optional, default `30` — forwarded to the internal `ensureValid()` call on every invocation. The header shape itself is not a per-call argument; it is configured once on `DeviceAuthConfig` via `buildAuthHeaders` (default: `{ Authorization: "{tokenType} {accessToken}" }`)
+- Rust: neither `as_auth_header_factory()` nor `as_async_auth_header_factory()` takes any argument. The header is hard-coded to `Authorization: "{token_type} {access_token}"` — Rust has no `header_name` / `value_template` equivalent
+
+### Errors
+- Constructing the factory never raises. Errors surface only when the returned callable is invoked, and only as whatever [`ensure_valid`](#contract-deviceauthclientensure_valid) raises — **except Rust's synchronous `as_auth_header_factory()`**, which never calls `ensure_valid` (see Properties) and therefore never raises: it logs a warning and returns an empty map when no credential has been cached yet by a prior `login()`/`ensure_valid()` call
+
+### Returns
+- On success: a callable/closure. Invoking it returns a **complete header mapping** (e.g. `{"Authorization": "Bearer <token>"}`), never a bare token string — the factory decides both the header name and the value format, since the correct header is provider data (`Authorization: Bearer`, `x-api-key`, and `api-key` are all in live use; see [Authentication header shape](#authentication-header-shape))
+- Python: the factory returns `dict[str, str]` synchronously
+- TypeScript: `asAuthHeaderFactory()` returns an `async` function; invoking it returns `Promise<Record<string, string>>`
+- Rust: `as_auth_header_factory()` returns a synchronous closure yielding `HashMap<String, String>`; `as_async_auth_header_factory()` returns a closure yielding a boxed future that resolves to `Result<HashMap<String, String>, DeviceAuthError>`
+
+### Properties
+- **This is the one place the three SDKs are not behaviourally aligned** — see the "Blocking" note under [Composition with `HTTPProxyRegistryWriter`](#composition-with-httpproxyregistrywriter) and [Decision 1](#decisions):
+    - **Python** — the single, synchronous factory calls `ensure_valid()` on every invocation, so a long-running process refreshes transparently with no async plumbing.
+    - **TypeScript** — `asAuthHeaderFactory()` returns an `async` function that calls `ensureValid()` internally on every invocation, refreshing transparently. The shipped `HTTPProxyRegistryWriter`'s factory type was widened to accept a `Promise` return (Decision 1, Option A); awaiting a non-promise return remains a no-op for callers unaffected by the change.
+    - **Rust** — the synchronous `as_auth_header_factory()` does **not** refresh. It only reads a last-known in-memory cache populated by a prior `login()` or `ensure_valid()` call, and returns an empty map (with a logged warning) if nothing is cached yet. Transparent refresh requires the separate `as_async_auth_header_factory()`, added *alongside* the synchronous one rather than changing its signature (Decision 1, Option A for Rust).
+- idempotent: true while the cached/stored credential is still valid — no network call, the same headers are returned
+- pure: false — reads (and, in Python/TypeScript and Rust's async variant, may refresh and write) shared client/store state
+- **Security constraint:** the returned factory is scoped to this client's one configured authorization server. Consumers MUST NOT reuse a factory across hosts — sending a bearer token to an unintended host leaks it (see [Security Considerations](#security-considerations))
+
+---
+
 ## Contract: TokenSet.is_expired
 
 ### Inputs
@@ -1756,6 +1809,11 @@ that regresses.
 ### Errors
 - `CredentialPermissionError` — an existing file has permissions broader than `0600`; refuse rather than read
 - I/O errors propagate
+
+### Returns
+- `load(key)` → `TokenSet | None` — the stored credential for `key`, or `None`/`null` when nothing is stored for it
+- `save(key, tokens)` → void — no return value; persistence (atomic, `0600` on POSIX) is the side effect
+- `clear(key)` → void — no return value; removal (a no-op when `key` is absent) is the side effect
 
 ### Properties
 - async: false (Python) / true (TypeScript, Rust)
@@ -1793,30 +1851,42 @@ transform_request  →  [HTTP]  →  parse_response  →  field-name aliasing
     one and all stay green. Case 047 pins the precedence; this paragraph pins
     the skipping.
 
-### transform_request
+### transform_request, parse_response, classify_error, and http_client
 
-- **Inputs:** `kind` (`"device"` | `"token"` | `"refresh"` | `"revoke"`), `params` (mapping), `headers` (mapping)
-- **Returns:** the possibly-modified `(params, headers)` pair
-- **Errors:** an exception propagates and fails the flow — unlike the observational callbacks, this hook is load-bearing and a failure must not be swallowed
-- **Constraints:** receives no URL and cannot influence request targeting
+Per-hook detail, referenced by the top-level sections below:
 
-### parse_response
+| Hook | Signature |
+|---|---|
+| `transform_request` | `(kind, params, headers) -> (params, headers)` |
+| `parse_response` | `(kind, status, content_type, raw_body) -> mapping \| None` |
+| `classify_error` | `(body) -> identifier \| None` |
+| `http_client` | not a callback — an injected object |
 
-- **Inputs:** `kind`, `status` (integer), `content_type` (string | null), `raw_body` (string)
-- **Returns:** a mapping using standard field names, or `None` to fall back to the built-in JSON / form-urlencoded parsers
-- **Errors:** propagate
+### Inputs
 
-### classify_error
+- **`transform_request`** — `kind` (`"device"` \| `"token"` \| `"refresh"` \| `"revoke"`), `params` (mapping), `headers` (mapping)
+- **`parse_response`** — `kind`, `status` (integer), `content_type` (string \| null), `raw_body` (string)
+- **`classify_error`** — `body` (the parsed error mapping)
+- **`http_client`** — none; this is an SDK-native object injected at construction (`httpx.Client`, a `fetch` implementation, `reqwest::Client`), not a callback with call-time arguments
 
-- **Inputs:** `body` (the parsed error mapping)
-- **Returns:** exactly one of `"authorization_pending"`, `"slow_down"`, `"access_denied"`, `"expired_token"`, or `None`
-- **Errors:** returning any other value MUST raise / throw / return `Err` — it is never coerced, defaulted, or passed through to dispatch
+### Errors
 
-### http_client
+- **`transform_request`** — an exception propagates and fails the flow; unlike the observational callbacks (`on_user_code` / `on_poll`), this hook is load-bearing and a failure must not be swallowed
+- **`parse_response`** — exceptions propagate
+- **`classify_error`** — returning any value outside the four RFC identifiers plus `None` MUST raise / throw / return `Err`; it is never coerced, defaulted, or passed through to dispatch
+- **`http_client`** — transport errors surface exactly as they would from the default client, so the retry semantics in the [dispatch table](#response-dispatch-normative) are unchanged
 
-- **Inputs:** none — this is an injected object, not a callback
-- **Type:** SDK-native (`httpx.Client`, a `fetch` implementation, `reqwest::Client`)
-- **Errors:** transport errors surface exactly as they would from the default client, so the retry semantics in the [dispatch table](#response-dispatch-normative) are unchanged
+### Returns
+
+- **`transform_request`** → the possibly-modified `(params, headers)` pair
+- **`parse_response`** → a mapping using standard field names, or `None` to fall back to the built-in JSON / form-urlencoded parsers
+- **`classify_error`** → exactly one of `"authorization_pending"`, `"slow_down"`, `"access_denied"`, `"expired_token"`, or `None`
+- **`http_client`** → not applicable; it is an injected object, not a return-producing callback
+
+### Constraints
+
+- `transform_request` receives no URL and cannot influence request targeting.
+- `parse_response`'s returned mapping must use standard field names — field-name aliasing has already been applied conceptually by the time the state machine reads it.
 
 ### Properties
 
@@ -1824,6 +1894,38 @@ transform_request  →  [HTTP]  →  parse_response  →  field-name aliasing
 - purity: not required; hooks may read external state
 - conformance: hook *contracts* (order, `None` semantics, invalid-return rejection) are asserted; hook *contents* are the consumer's responsibility
 - guarantee: with no hooks installed, behaviour is byte-identical to the corpus baseline
+
+---
+
+## Contract: DeviceAuthConfig.discover
+
+### Inputs
+- Python: `transport`: `Transport`, optional, keyword-only — injection seam the conformance harness uses; defaults to a real `HttpxTransport`
+- TypeScript: `options.fetchImpl`: a `fetch` implementation, optional — overrides the config's own `fetchImpl`, falling back to the global `fetch` (Node 20+)
+- Rust: `discover(&self)` takes no arguments (uses `hooks.http_client` when configured, else a default `ReqwestTransport`); `discover_with(&self, transport, issuer)` is the explicit-transport variant the conformance harness calls
+- All three: requires `issuer` to already be configured. None of the three accept endpoints as input — `discover()` only ever reads the receiver's own `issuer` (plus its existing `field_aliases` / `extra_headers`)
+
+### Errors
+- No issuer configured — `ConfigurationError` (Python) / `DeviceAuthConfigError` (TypeScript) / `DeviceAuthError::Config` (Rust): "discover() requires an issuer"
+- No candidate yields an authoritative metadata document (all three well-known URLs are unreachable, non-2xx, non-JSON, or lack an `issuer`/endpoint field) — Python raises `DiscoveryError` (`reason=NO_METADATA`); TypeScript throws `DiscoveryError`; Rust returns `DeviceAuthError::Config`. **Rust has no dedicated discovery-error type**, unlike Python's and TypeScript's `DiscoveryError`
+- Issuer mismatch (`document.issuer != self.issuer`, compared as an exact string) — **Python** raises `DiscoveryError` (`reason=ISSUER_MISMATCH`) immediately for that candidate rather than trying the next one; **TypeScript and Rust** instead record a warning for that candidate and continue to the next well-known URL. This is a genuine cross-SDK divergence in control flow, not just error type.
+- Metadata found but omits `device_authorization_endpoint` (OPTIONAL per RFC 8414) with no explicit override already configured — `ConfigurationError` (Python) / `DiscoveryError` (TypeScript) / `DeviceAuthError::Config` (Rust); actionable, naming the missing setting
+- A discovered endpoint that is not `https://` (nor `http://localhost`) — refused outright, never merged: `DiscoveryError` (`reason=INSECURE_ENDPOINT`, Python) / `DiscoveryError` (TypeScript) / `DeviceAuthError::Config` (Rust)
+- A discovered endpoint on a different origin than the issuer — **not an error**: logged as a warning and used anyway (see [Endpoint discovery](#endpoint-discovery))
+- A transport failure against one candidate — swallowed and logged/recorded as a warning; the next candidate is tried
+
+### Returns
+- On success: a **new** `DeviceAuthConfig` with `device_authorization_endpoint`, `token_endpoint`, and `revocation_endpoint` filled in from the accepted metadata document. Explicit values already set on the receiver always win and are never overwritten by a discovered one. The receiver itself is never mutated — Python returns via `dataclasses.replace`, TypeScript via `this.with({...})`, Rust returns an owned, cloned-and-merged `DeviceAuthConfig`.
+- Candidates are tried in order, stopping at the first one that is `2xx` **and** parses as a JSON object **and** carries the metadata fields being looked for:
+    1. RFC 8414 path-insertion, `oauth-authorization-server` suffix
+    2. RFC 8414 path-insertion, `openid-configuration` suffix
+    3. OpenID Connect Discovery 1.0 appending: `{issuer}/.well-known/openid-configuration`
+
+### Properties
+- async: true (all three SDKs) — `await config.discover()` / `config.discover().await`
+- pure: false — network I/O; this is exactly why discovery is a **separate, explicit step**, never a hidden fetch inside `login()`
+- idempotent: true — re-running discovery against an unchanged metadata document yields an equivalent config
+- side-effect-free on the receiver: always returns a new config rather than mutating `self`/`this`
 
 ---
 

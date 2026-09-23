@@ -145,9 +145,10 @@ modules = scanner.scan("commands/", include=r"^ops\.", exclude=r"debug")
 - `exclude`: string regex pattern, optional — module ID filter
 
 ### Errors
-- `FileNotFoundError` — `commands_dir` does not exist
-- `ImportError` — command file has an import that cannot be resolved
-- `re.error` — invalid `include` or `exclude` regex pattern
+- `ValueError` — invalid `include` or `exclude` regex pattern (forwarded to `BaseScanner.filter_modules`, which catches the underlying `re.error` and re-raises `ValueError`; `re.error` does not subclass `ValueError`, so a caller catching `re.error` would not catch what is actually raised)
+- **Not raised, despite being plausible caller-observable errors — both are best-effort, logged-and-skipped internal conditions** (verified against `apcore-toolkit-python/src/apcore_toolkit/convention_scanner.py`, matching this file's own description under [File Discovery Rules](#file-discovery-rules) items 6 and the paragraph below the numbered list):
+    - A missing/non-directory `commands_dir` (`:75-77`) — logs a WARNING and returns `[]`; does **not** raise `FileNotFoundError`.
+    - A command file with an unresolvable import, or any other exception while scanning one file (`:83-89`) — caught by a blanket `except Exception`, logged as a WARNING with the traceback, and scanning continues with the remaining files; does **not** raise `ImportError` or propagate any other exception from the offending file.
 
 ### Returns
 - On success: `list[ScannedModule]` — one entry per discovered callable in `commands_dir`
