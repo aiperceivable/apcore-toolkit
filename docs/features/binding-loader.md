@@ -175,8 +175,8 @@ This is apcore's rule, adopted verbatim: `PROTOCOL_SPEC` §9.2.3 Algorithm A25
 requirement 2, and §5.12.6 clause 6 stating it for `bindings.pattern`
 specifically.
 
-!!! note "This reverses the 0.12.0 behaviour, and the reason is worth recording"
-    0.12.0 rejected an empty pattern and any pattern containing `/` or `\`,
+!!! note "This reverses a pre-release draft of 0.12.0, and the reason is worth recording"
+    A pre-release draft of 0.12.0 rejected an empty pattern and any pattern containing `/` or `\`,
     which made `**/*.binding.yaml` — the shape a caller reaches for first when
     they want recursion — a clear error pointing at `recursive=True` instead of
     a silently empty result. That was the better diagnostic, and it is gone.
@@ -184,7 +184,7 @@ specifically.
     It was given up because the whole reason this parameter exists is to let a
     caller honour apcore's `bindings.pattern` (see the section opening). A
     caller that resolves the key from `Config` and hands the same string to
-    both components must get the same answer from both; under 0.12.0, apcore
+    both components must get the same answer from both; under that draft, apcore
     matched nothing and the toolkit raised. Two components reading one
     configuration key and disagreeing is precisely the failure
     [#18](https://github.com/aiperceivable/apcore-toolkit/issues/18) was filed
@@ -225,7 +225,7 @@ When `path` names a file, `pattern` is ignored for **matching**. A caller that
 explicitly names one file has already made the selection; the loader does not
 second-guess it, and `load("odd-name.yaml")` still works.
 
-*0.12.0 additionally validated the pattern here, ahead of the file/directory
+*The 0.12.0 draft additionally validated the pattern here, ahead of the file/directory
 check, so that a malformed one raised even for a single-file path. That was
 dropped before release — validation is gone entirely — see
 [Every string is a valid pattern](#every-string-is-a-valid-pattern) — so there
