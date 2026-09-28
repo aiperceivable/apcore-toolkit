@@ -2,7 +2,7 @@
   "$schema": "https://apcore.dev/schemas/conformance-fixture.json",
   "title": "OpenAPI Scanner — OpenAPIScanner.scan() / derive_module_id()",
   "description": "Byte-equivalent OpenAPIScanner behaviour across Python / TypeScript / Rust SDKs. `expected.modules` entries are compared structurally (parsed-JSON deep equality), not as raw strings.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "test_cases": [
     {
       "id": "openapi_scan_001_empty_paths",
@@ -80,7 +80,7 @@
     },
     {
       "id": "openapi_scan_003_operation_id_preserved",
-      "description": "operationId: getUserById used verbatim, case preserved",
+      "description": "operationId: getUserById is normalised to snake_case (get_user_by_id); the raw value is kept in metadata.openapi.operation_id",
       "input": {
         "spec": {
           "openapi": "3.0.3",
@@ -105,7 +105,7 @@
       "expected": {
         "modules": [
           {
-            "module_id": "getUserById",
+            "module_id": "get_user_by_id",
             "description": "",
             "documentation": null,
             "tags": [],
@@ -1213,7 +1213,7 @@
       "expected": {
         "modules": [
           {
-            "module_id": "listThings",
+            "module_id": "list_things",
             "description": "",
             "documentation": null,
             "tags": [],
@@ -1243,7 +1243,7 @@
             "warnings": []
           },
           {
-            "module_id": "listThings_2",
+            "module_id": "list_things_2",
             "description": "",
             "documentation": null,
             "tags": [],
@@ -1271,7 +1271,7 @@
               "properties": {}
             },
             "warnings": [
-              "Module ID renamed from 'listThings' to 'listThings_2' to avoid collision"
+              "Module ID renamed from 'list_things' to 'list_things_2' to avoid collision"
             ]
           }
         ]
@@ -1904,6 +1904,1095 @@
               "url_path": "/widgets",
               "openapi": {
                 "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_025_operation_id_snake_case_boundaries",
+      "description": "operationId normalisation pins the two word-boundary regexes on acronyms (getHTTPResponse, getUserID, OAuth2Token, getIDs), digits (v2Items) and hyphens (list-pets); a FastAPI-style ID that is already legal passes through unchanged, __ runs included; a trailing '_' is stripped from the operationId branch only; an astral character is ONE code point and becomes ONE '_' (JavaScript needs the u flag). getIDs -> get_i_ds is a known limitation, pinned so that every SDK produces it",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/a": {
+              "get": {
+                "operationId": "getHTTPResponse",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/b": {
+              "get": {
+                "operationId": "getUserID",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/c": {
+              "get": {
+                "operationId": "OAuth2Token",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/d": {
+              "get": {
+                "operationId": "list-pets",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/e": {
+              "get": {
+                "operationId": "v2Items",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/f": {
+              "get": {
+                "operationId": "get_product_product__product_id__get",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/g": {
+              "get": {
+                "operationId": "getIDs",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/h": {
+              "get": {
+                "operationId": "getUser_",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/i": {
+              "get": {
+                "operationId": "a😀b",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "get_http_response",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /a",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/a",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "getHTTPResponse"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "get_user_id",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /b",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/b",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "getUserID"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "o_auth2_token",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /c",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/c",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "OAuth2Token"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "list_pets",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /d",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/d",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "list-pets"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "v2_items",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /e",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/e",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "v2Items"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "get_product_product__product_id__get",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /f",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/f",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "get_product_product__product_id__get"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "get_i_ds",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /g",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/g",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "getIDs"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "get_user",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /h",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/h",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "getUser_"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "a_b",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /i",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/i",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "a😀b"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_026_path_derivation_normalised",
+      "description": "Path-derived IDs are normalised like operationIds: hyphens and camelCase path segments become snake_case, and a segment's leading/trailing underscores are stripped",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/user-profiles/{userId}": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/v1/_debug/": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "user_profiles.user_id.get",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /user-profiles/{userId}",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/user-profiles/{userId}",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "v1.debug.get",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /v1/_debug/",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/v1/_debug/",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_027_illegal_segment_warns",
+      "description": "A segment that still begins with a digit after normalisation is not repaired (that would invent a name): the module is emitted with a warning, from both the path branch and the operationId branch",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/v1/2fa": {
+              "post": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/verify": {
+              "get": {
+                "operationId": "3ds",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "v1.2fa.post",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "POST /v1/2fa",
+            "annotations": {},
+            "metadata": {
+              "http_method": "POST",
+              "url_path": "/v1/2fa",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": [
+              "module_id 'v1.2fa.post' is not a legal apcore module ID: segment '2fa' must match ^[a-z][a-z0-9_]*$; name this operation with a derive_module_id or transform_module hook"
+            ]
+          },
+          {
+            "module_id": "3ds",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /verify",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/verify",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "3ds"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": [
+              "module_id '3ds' is not a legal apcore module ID: segment '3ds' must match ^[a-z][a-z0-9_]*$; name this operation with a derive_module_id or transform_module hook"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_028_prefix_normalised",
+      "description": "base_path_prefix is part of the final module_id and is normalised with it: Pet-Store -> pet_store",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/users": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "options": {
+          "base_path_prefix": "Pet-Store"
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "pet_store.users.get",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /users",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/users",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_029_hook_output_normalised",
+      "description": "A derive_module_id hook's return value is normalised like the default derivation: Custom-Space.GetThing -> custom_space.get_thing",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/widgets": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "options": {},
+        "hooks": {
+          "derive_module_id": "always_returns_mixed_case_id"
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "custom_space.get_thing",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /widgets",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/widgets",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_030_illegal_id_warning_follows_dedup",
+      "description": "The legality check runs after deduplicate_ids, so a renamed module's warning names the ID actually emitted (3ds_2) and follows the dedup warning",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/a": {
+              "get": {
+                "operationId": "3ds",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/b": {
+              "get": {
+                "operationId": "3ds",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "3ds",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /a",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/a",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "3ds"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": [
+              "module_id '3ds' is not a legal apcore module ID: segment '3ds' must match ^[a-z][a-z0-9_]*$; name this operation with a derive_module_id or transform_module hook"
+            ]
+          },
+          {
+            "module_id": "3ds_2",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /b",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/b",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "3ds"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": [
+              "Module ID renamed from '3ds' to '3ds_2' to avoid collision",
+              "module_id '3ds_2' is not a legal apcore module ID: segment '3ds_2' must match ^[a-z][a-z0-9_]*$; name this operation with a derive_module_id or transform_module hook"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_031_degenerate_path_root_fallback",
+      "description": "Path segments are normalised one by one and dropped when empty; a path with no surviving segment falls back to root.<method>, exactly like GET /",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/-": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/{}": {
+              "post": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "root.get",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /-",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/-",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "root.post",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "POST /{}",
+            "annotations": {},
+            "metadata": {
+              "http_method": "POST",
+              "url_path": "/{}",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_032_final_pass_keeps_legal_ids",
+      "description": "The final normalisation returns a legal ID unchanged: a derive_module_id hook returning abc_ under base_path_prefix pre_ is emitted as pre_.abc_ - no trailing '_' is stripped, per segment or at the end. Drivers implement the named hook always_returns_legal_trailing_underscore_id",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/widgets": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "options": {
+          "base_path_prefix": "pre_"
+        },
+        "hooks": {
+          "derive_module_id": "always_returns_legal_trailing_underscore_id"
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "pre_.abc_",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /widgets",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/widgets",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "openapi_scan_033_replacement_is_per_code_point",
+      "description": "Each character outside the alphabet becomes its own '_' (list--pets -> list__pets, never collapsed); a path segment keeps its trailing '_' (GET /items_ -> items_.get); and lowercasing runs after the replacement, so U+212A KELVIN SIGN becomes '_' and is stripped (Kelvin -> elvin), never 'k'",
+      "input": {
+        "spec": {
+          "openapi": "3.0.3",
+          "info": {
+            "title": "t",
+            "version": "1.0.0"
+          },
+          "paths": {
+            "/items_": {
+              "get": {
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/b": {
+              "get": {
+                "operationId": "list--pets",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            },
+            "/c": {
+              "get": {
+                "operationId": "Kelvin",
+                "responses": {
+                  "200": {
+                    "description": "ok"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "expected": {
+        "modules": [
+          {
+            "module_id": "items_.get",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /items_",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/items_",
+              "openapi": {
+                "spec_version": "3.0.3"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "list__pets",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /b",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/b",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "list--pets"
+              }
+            },
+            "input_schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "output_schema": {
+              "type": "object",
+              "properties": {}
+            },
+            "warnings": []
+          },
+          {
+            "module_id": "elvin",
+            "description": "",
+            "documentation": null,
+            "tags": [],
+            "version": "1.0.0",
+            "target": "GET /c",
+            "annotations": {
+              "readonly": true,
+              "cacheable": true
+            },
+            "metadata": {
+              "http_method": "GET",
+              "url_path": "/c",
+              "openapi": {
+                "spec_version": "3.0.3",
+                "operation_id": "Kelvin"
               }
             },
             "input_schema": {

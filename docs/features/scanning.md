@@ -241,14 +241,15 @@ For deeper behavioral analysis beyond HTTP methods, see [Phase 5](#phase-5-infer
 ## Contract: BaseScanner.scan
 
 ### Inputs
-- Framework-specific — subclass defines the signature. Python implementations typically accept `**kwargs`; TypeScript implementations accept an options object.
+- Framework-specific — subclass defines the signature. Python implementations typically accept `**kwargs`; TypeScript implementations accept an options object. Rust fixes the shape to one argument, `app: &App`, where `App` is the trait's type parameter (default `()`); an implementation needing several inputs bundles them into its `App` type.
 
 ### Errors
 - Framework-specific — subclass defines error behavior
 - `ValueError` (Python) / `Error` (TypeScript) — if `include`/`exclude` kwargs are forwarded to `filter_modules` with invalid patterns. Python's `filter_modules` catches the underlying `re.error` and re-raises `ValueError` (see [Contract: BaseScanner.filter_modules](#contract-basescannerfilter_modules)); `re.error` does not subclass `ValueError`, so a caller catching `re.error` here would not catch what is actually raised.
+- Rust: `Err(Self::Error)`. The trait declares an associated `type Error: std::error::Error + Send + Sync + 'static`, so an implementation chooses its own error type, and one that cannot fail uses `std::convert::Infallible`. Before toolkit-rust 0.13.0 `scan` returned a bare `Vec<ScannedModule>`, which left a Rust scanner no way to report the failures Python and TypeScript raise — it had to panic or return an empty list ([`apcore-toolkit-rust#4`](https://github.com/aiperceivable/apcore-toolkit-rust/issues/4)).
 
 ### Returns
-- On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>` — all discovered modules after filtering and deduplication
+- On success: `list[ScannedModule]` / `ScannedModule[]` / `Ok(Vec<ScannedModule>)` — all discovered modules after filtering and deduplication
 
 ### Properties
 - async: false (Python, most TypeScript) / async: true (Rust — `async fn scan`)

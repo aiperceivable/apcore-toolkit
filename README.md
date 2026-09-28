@@ -119,8 +119,11 @@ Available in:
 
     #[async_trait]
     impl BaseScanner<()> for MyScanner {
-        async fn scan(&self, _app: &()) -> Vec<ScannedModule> {
-            vec![
+        // A scanner that cannot fail says so; one that can names its error type.
+        type Error = std::convert::Infallible;
+
+        async fn scan(&self, _app: &()) -> Result<Vec<ScannedModule>, Self::Error> {
+            Ok(vec![
                 ScannedModule::new(
                     "users.get_user".into(),
                     "Get a user by ID".into(),
@@ -129,15 +132,17 @@ Available in:
                     vec!["users".into()],
                     "myapp:get_user".into(),
                 )
-            ]
+            ])
         }
-        fn get_source_name(&self) -> &str { "my-framework" }
+        fn source_name(&self) -> &str { "my-framework" }
     }
 
     #[tokio::main]
-    async fn main() {
+    async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let scanner = MyScanner;
-        let modules = scanner.scan(&()).await;
+        let modules = scanner.scan(&()).await?;
+        println!("{} modules", modules.len());
+        Ok(())
     }
     ```
 
