@@ -19,6 +19,7 @@ The shared conformance fixtures currently cover:
 | Device authorization flow | `conformance/fixtures/device_auth.json` | RFC 8628 polling state machine, token lifecycle, provider-compatibility normalisation, and discovery URL construction |
 | `$ref` resolution | `conformance/fixtures/ref_resolution.json` | `$ref` inlining and sibling-key merging — carries `x-sensitive` through to the schema apcore redacts on |
 | Binding pattern | `conformance/fixtures/binding_pattern.json` | `BindingLoader.load` name-matching syntax, rejected patterns, and composition with `recursive` |
+| Binding structure | `conformance/fixtures/binding_structure.json` | Closed document/entry keys, paired inline schemas, and strict/loose field validation through in-memory and YAML loading |
 | Display overlay | `conformance/fixtures/display_resolve.json` | Portable display metadata resolution |
 | CSV / JSONL | `conformance/fixtures/format_csv.json`, `format_jsonl.json` | Canonical text output and line-ending rules |
 | Module formatting | formatting fixtures in each SDK | Markdown, Skill, table-row, and JSON surface contracts |

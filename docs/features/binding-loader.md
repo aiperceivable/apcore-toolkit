@@ -43,6 +43,32 @@ Both return `list[ScannedModule]` (or `ScannedModule[]` / `Vec<ScannedModule>`).
 
 Missing optional fields fall back to `ScannedModule` dataclass defaults (empty schemas, empty tags, `version="1.0.0"`, `display=None`, etc.).
 
+### Structural validation
+
+Both modes reject malformed binding documents before applying their field-default
+policy. A document may contain only `spec_version` and `bindings`; each binding
+may contain only the pure-data fields this loader preserves in a
+`ScannedModule`. Unknown keys are errors, not forward-compatible extensions,
+because a misspelled schema field could otherwise produce an unvalidated module.
+Likewise, `input_schema` and `output_schema` are an atomic inline-schema pair:
+supplying exactly one is an error in either mode. Omitting both remains valid in
+loose mode for inspection and merge workflows.
+
+`auto_schema` and `schema_ref` are runtime schema sources, so this pure-data
+loader rejects them rather than accepting a value it cannot resolve. Use
+`apcore.BindingLoader` when target import, schema-file loading, or inference is
+required.
+
+The accepted entry keys are `module_id`, `target`, `description`,
+`documentation`, `input_schema`, `output_schema`, `annotations`, `tags`,
+`version`, `metadata`, `display`, `suggested_alias`, `examples`, and `warnings`.
+The closed key set applies to the document and entry only: custom keys inside
+schemas, `metadata`, or annotation `extra` remain valid.
+
+The shared `conformance/fixtures/binding_structure.json` corpus exercises these
+rules, defaults, and wrong-type handling through in-memory and file-loading
+entry points in every SDK, in both modes.
+
 #### Loose-mode wrong-type policy
 
 When a non-required field (`input_schema`, `output_schema`, `tags`) is present but holds the wrong type — e.g., `input_schema: 42` or `tags: "single-string"` — the policy is mode-dependent:
@@ -439,7 +465,7 @@ Python and TypeScript loaders do not currently enforce these caps. Callers in th
 - `strict`: bool, optional, default=false — if true, raises `BindingLoadError` on missing required fields (`input_schema`, `output_schema`)
 
 ### Errors
-- `BindingLoadError` (Python raises, TypeScript throws, Rust returns `Err`) — top-level value is not a mapping, missing `bindings` key, invalid entry structure, or strict-mode violation
+- `BindingLoadError` (Python raises, TypeScript throws, Rust returns `Err`) — top-level value is not a mapping, missing `bindings` key, unknown document or entry keys, a one-sided schema pair, invalid entry structure, or strict-mode violation
 
 ### Returns
 - On success: `list[ScannedModule]` / `ScannedModule[]` / `Vec<ScannedModule>`
@@ -512,7 +538,7 @@ Fields that `YAMLWriter` does not emit (e.g., `warnings`) are not preserved — 
     Rust gains a second method rather than a fourth parameter because adding one would break every existing caller; `load` delegates to `load_with_pattern(..., None)`. This is the same two-tier shape `apcore` uses for `load_binding_dir` / `load_binding_dir_with_config`.
 
 ### Errors
-- `BindingLoadError` / `BindingLoadError` (Python raises, Rust returns `Err`) — path not found, YAML parse failure, or strict mode violation
+- `BindingLoadError` (Python raises, TypeScript throws, Rust returns `Err`) — path not found, YAML parse failure, document or entry structural violation, or strict-mode violation
 - `BindingLoadError::FileRead` (Rust) — any OS/IO error on the *root* path; per-entry errors during recursive traversal are governed by the policy below
 - `BindingLoadError` (Python) — OS errors on the root path wrapping `IOError`/`OSError` raise immediately
 

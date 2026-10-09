@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2026-10-09
+
+Coordinated Python, TypeScript, and Rust SDK update for apcore 0.32.0.
+Public loader signatures and error types are unchanged, but binding-file
+validation is stricter.
+
+### Breaking
+
+- Binding documents with unknown top-level or entry keys, or only one inline
+  schema, now fail in both loose and strict modes instead of being tolerated.
+  Remove unsupported keys, put application-specific entry data in `metadata`,
+  and supply both `input_schema` and `output_schema` (or neither in loose mode).
+  Runtime `auto_schema` and `schema_ref` entries must use apcore's runtime
+  loader rather than the toolkit's pure-data loader.
+- Strict mode now rejects non-list `tags` consistently across SDKs; TypeScript
+  and Rust previously accepted them. Loose mode continues with `[]` and a warning.
+
+### Changed
+
+- **Required apcore floor raised to 0.32.0** across the Python, TypeScript, and
+  Rust SDKs. The toolkit's imported runtime surface (`Registry`, module and
+  annotation types, schema helpers, `Context`, and `ModuleError`) is unchanged
+  by the release. Its pure-data `BindingLoader`, however, now follows the
+  binding-file structural rules made normative in apcore 0.32.0: unknown
+  document or entry keys and one-sided inline schema pairs are rejected in both
+  loose and strict modes. Runtime `auto_schema` inference remains deliberately
+  owned by apcore's target-loading `BindingLoader`, not this toolkit's
+  pure-data parser.
+
+### Fixed
+
+- **BindingLoader behavior aligned across SDKs.** Rust now warns and defaults
+  malformed inline schemas to `{}` in loose mode. TypeScript and Rust now
+  reject non-list `tags` in strict mode and warn and default to `[]` in loose
+  mode, matching the documented Python behavior. Python now warns and
+  continues for non-string `spec_version` values instead of raising an
+  unhashable-value `TypeError` for lists or mappings.
+
+### Added
+
+- **Shared binding-structure conformance corpus** — 18 cases, each exercised
+  in both modes through in-memory parsing and YAML file loading by all three
+  SDKs. Public loader signatures and error types remain unchanged.
+- SDK CI checks out the canonical fixture repository's `main` beside each
+  SDK and fails with publication-order guidance if the new binding-structure
+  corpus is missing. Publish the corpus before the SDK changes.
+
 ## [0.13.0] - 2026-09-28
 
 A breaking release: `OpenAPIScanner` module IDs are normalised into apcore's Canonical ID alphabet (read the Migration note before upgrading — IDs derived from camelCase names change), and Rust's `BaseScanner::scan` becomes fallible. The apcore floor is unchanged (0.31.0).

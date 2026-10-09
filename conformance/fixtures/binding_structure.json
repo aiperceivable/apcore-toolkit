@@ -1,0 +1,23 @@
+{
+  "description": "Pure-data binding structural validation shared by the Python, TypeScript and Rust toolkit SDKs. Each case runs in loose and strict mode. Error values are substrings of the reported diagnostic; success fields use the portable snake_case representation. Runtime schema sources remain unsupported.",
+  "test_cases": [
+    {"id": "minimal", "data": {"bindings": [{"module_id": "x", "target": "p:f"}]}, "strict_error": "input_schema"},
+    {"id": "paired", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": {}, "output_schema": {}}]}},
+    {"id": "unknown_document", "data": {"bindings": [], "generated_at": "today"}, "loose_error": "unknown", "strict_error": "unknown"},
+    {"id": "unknown_entry", "data": {"bindings": [{"module_id": "x", "target": "p:f", "targte": "typo"}]}, "loose_error": "unknown", "strict_error": "unknown"},
+    {"id": "schema_typo", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_shema": {}}]}, "loose_error": "unknown", "strict_error": "unknown"},
+    {"id": "runtime_auto_schema", "data": {"bindings": [{"module_id": "x", "target": "p:f", "auto_schema": true}]}, "loose_error": "unknown", "strict_error": "unknown"},
+    {"id": "runtime_schema_ref", "data": {"bindings": [{"module_id": "x", "target": "p:f", "schema_ref": "schema.yaml"}]}, "loose_error": "unknown", "strict_error": "unknown"},
+    {"id": "input_only", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": {}}]}, "loose_error": "together", "strict_error": "together"},
+    {"id": "output_only", "data": {"bindings": [{"module_id": "x", "target": "p:f", "output_schema": {}}]}, "loose_error": "together", "strict_error": "together"},
+    {"id": "null_input_only", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": null}]}, "loose_error": "together", "strict_error": "together"},
+    {"id": "null_pair", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": null, "output_schema": null}]}, "strict_error": "input_schema", "fields": {"input_schema": {}, "output_schema": {}}},
+    {"id": "string_input", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": "invalid", "output_schema": {}}]}, "strict_error": "input_schema", "fields": {"input_schema": {}, "output_schema": {}}},
+    {"id": "array_output", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": {}, "output_schema": [1]}]}, "strict_error": "output_schema", "fields": {"input_schema": {}, "output_schema": {}}},
+    {"id": "invalid_tags", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": {}, "output_schema": {}, "tags": "invalid"}]}, "strict_error": "tags", "fields": {"tags": []}},
+    {"id": "nested_extensions", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": {"x-sensitive": true}, "output_schema": {}, "metadata": {"custom": {"anything": true}}}]}, "fields": {"input_schema": {"x-sensitive": true}, "metadata": {"custom": {"anything": true}}}},
+    {"id": "preserved_toolkit_fields", "data": {"bindings": [{"module_id": "x", "target": "p:f", "input_schema": {}, "output_schema": {}, "suggested_alias": "alias", "examples": [], "warnings": ["stale"]}]}, "fields": {"suggested_alias": "alias", "examples": [], "warnings": ["stale"]}},
+    {"id": "array_spec_version", "data": {"spec_version": [], "bindings": [{"module_id": "x", "target": "p:f", "input_schema": {}, "output_schema": {}}]}},
+    {"id": "object_spec_version", "data": {"spec_version": {}, "bindings": [{"module_id": "x", "target": "p:f", "input_schema": {}, "output_schema": {}}]}}
+  ]
+}
