@@ -347,12 +347,12 @@
         "poll_delays": [
           5,
           5,
-          5
+          2
         ],
         "final_interval": 5,
         "polls_made": 2
       },
-      "notes": "Elapsed reaches 15 >= 12 on the third sleep, so the third poll never happens. Relying on the server's error alone leaves a client polling forever."
+      "notes": "After two 5-second waits, only 2 seconds remain. The third sleep is capped to that remaining budget, so elapsed reaches 12 exactly and the third poll never happens. Relying on the server's error alone leaves a client polling forever."
     },
     {
       "id": "device_auth_poll_009_initial_wait",
