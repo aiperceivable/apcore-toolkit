@@ -28,6 +28,15 @@ Every SDK runs the relevant shared fixtures. A new cross-language observable
 contract should add a fixture here rather than rely on three independently
 maintained examples.
 
+The effective OpenAPI contract covers the
+[scanner](../features/openapi-scanner.md#effective-parameter-scanning) and
+its [proxy diagnostics](../features/output-writers.md#effective-proxy-diagnostics).
+The CLI SDKs exercise those toolkit APIs with the shared
+[document cases](https://github.com/aiperceivable/apcore-cli/blob/main/conformance/fixtures/openapi_effective_documents.json)
+and [diagnostic JSON cases](https://github.com/aiperceivable/apcore-cli/blob/main/conformance/fixtures/openapi_effective_hazards.json)
+in the CLI specification repository. The toolkit's existing OpenAPI fixture
+continues to cover the legacy scanner contract.
+
 ## Intentional SDK-native surfaces
 
 Not every API is byte-equivalent or available in every language:

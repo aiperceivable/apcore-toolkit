@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2026-11-19
+
+### Added
+
+- Documented the coordinated 0.15.0 effective OpenAPI scanner and proxy
+  preflight for Python, TypeScript and Rust. Inherited and referenced
+  parameters share a single resolution step for tool schemas and routing
+  metadata.
+- Defined the portable HTTP proxy subset and shared diagnostic JSON for
+  validating selected operations before registration. Effective findings
+  redact external reference identifiers.
+
 ## [0.14.0] - 2026-10-09
 
 Coordinated Python, TypeScript, and Rust SDK update for apcore 0.32.0.

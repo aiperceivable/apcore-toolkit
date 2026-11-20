@@ -27,6 +27,23 @@ The `extract_input_schema()` function performs intelligent merging:
 
 This produces the flat `input_schema` required by the `ScannedModule`.
 
+## Schema Extraction Modes
+
+The operation-level helpers and `OpenAPIScanner.scan()` retain their
+existing extraction behavior. The
+[effective scanner](openapi-scanner.md#effective-parameter-scanning) starts
+with the full document so it can inherit Path Item parameters and resolve
+Parameter and Request Body Objects before generating a tool schema.
+
+Effective resolution supports local URI-fragment JSON pointers, including
+percent-encoded pointer segments and array indices. It preserves the
+semantics of boolean schemas. A boolean response root is expressed as
+`{}` for `true` and `{"not":{}}` for `false`. A schema with constraints
+beside a resolved `$ref` applies both sets of constraints. It can use
+`allOf` to preserve the conjunction when merging keys would overwrite
+assertions. The resolved inputs also supply the
+[proxy routing metadata](output-writers.md#effective-openapi-forwarding).
+
 ## Example Usage
 
 === "Python"

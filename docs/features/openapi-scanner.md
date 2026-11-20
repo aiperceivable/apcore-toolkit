@@ -22,7 +22,7 @@ description: "OpenAPIScanner lifting a whole OpenAPI document into ScannedModule
     | **Revised** | 2026-09-28 — every emitted `module_id` is normalised into apcore's Canonical ID alphabet ([`module_id` Derivation](#module_id-derivation)); corpus `openapi_scan.json` 2.0.0 |
     | **Tracking issue** | [aiperceivable/apcore-toolkit#16](https://github.com/aiperceivable/apcore-toolkit/issues/16) |
     | **Depends on** | [`openapi.md`](openapi.md) (schema extraction primitives, already shipped) · [`scanning.md`](scanning.md) (`BaseScanner` contract) · [`output-writers.md`](output-writers.md) (`HTTPProxyRegistryWriter`, `YAMLWriter`) |
-    | **Affects** | `apcore-cli-{python,typescript,rust}` (Phase 3 consumer work, not yet started — no toolkit-side change required) · `apcore-mcp-*` / `apcore-a2a-*` OpenAPI backends, which each carry a private module-ID projection that this revision makes redundant |
+    | **Affects** | The OpenAPI commands in `apcore-cli` and the standalone OpenAPI backends in `apcore-mcp` and `apcore-a2a` |
 
 !!! note "Rust: standalone struct, not a `BaseScanner` impl"
     [`apcore-toolkit-rust#4`](https://github.com/aiperceivable/apcore-toolkit-rust/issues/4)
@@ -525,9 +525,10 @@ that emits anything else produces modules the writer cannot execute.
 | `http_method` | **Uppercase** HTTP method | `"GET"` |
 | `url_path` | Path template, `{param}` braces retained, leading slash | `"/users/{user_id}"` |
 
-These two flat, snake_case keys are what all three writers read. Getting either
-name wrong is not a soft failure: the writer silently falls back to `"GET"` and
-`"/"`, and every scanned module quietly proxies to the API root.
+These flat, snake_case keys are portable across all three writers. The
+[effective preflight](output-writers.md#effective-proxy-diagnostics) reports
+missing route fields. The legacy writer can fall back to `"GET"` or `"/"`
+when a field is absent.
 
 !!! danger "Uppercase is mandatory, not cosmetic"
     The Rust writer matches the method against exact uppercase literals and
@@ -544,8 +545,9 @@ name wrong is not a soft failure: the writer silently falls back to `"GET"` and
 
 ### Informational keys
 
-OpenAPI-specific facts that no writer reads, recorded under a nested key so
-they cannot collide with the two normative names above:
+The following informational fields are recorded under `metadata.openapi`.
+Effective scans also record [proxy input metadata](#effective-parameter-scanning)
+under that key.
 
 | `metadata["openapi"]` field | Value | Omitted when |
 |---|---|---|
@@ -554,26 +556,14 @@ they cannot collide with the two normative names above:
 | `server_url` | `servers[0].url` | no `servers` entry |
 | `summary` | `operation.summary` | absent |
 
-### What the scanner deliberately does *not* record
+### Input locations and the legacy scanner
 
-The writer partitions inputs by itself: it extracts path-parameter names from
-`url_path`, removes those from the remaining inputs, and sends the rest as a
-JSON body for `POST`/`PUT`/`PATCH` or as a query string otherwise.
-
-An earlier draft of this proposal had the scanner emit explicit
-`path_params` / `query_params` / `body_params` lists, on the reasoning that
-`extract_input_schema` merges all three into one flat schema (see
-[`openapi.md` § Parameter Merging](openapi.md#parameter-merging)) and destroys
-the distinction. That reasoning was wrong in practice: the writer reconstructs
-the path/non-path split from `url_path`, and its body-vs-query decision is
-driven by the HTTP method rather than by the spec. Emitting the lists would
-create a second source of truth that the writer ignores — worse than useless,
-because it would look authoritative.
-
-The one real casualty is a query parameter that OpenAPI declares for a
-`POST`: the writer will place it in the body. That is a limitation of the
-shipped writer, not something the scanner can fix by emitting more metadata,
-and it is recorded in [Risks](#risks).
+`scan()` retains the original flat schema and route metadata. The generic
+writer uses the template to collect path values, then sends the remaining
+values as JSON for `POST`, `PUT` and `PATCH`, or as query parameters for other
+methods. To validate that this routing can represent an OpenAPI operation,
+use [effective parameter scanning](#effective-parameter-scanning) and the
+[shared preflight](output-writers.md#effective-proxy-diagnostics).
 
 ### Which field gets `target`, then?
 
@@ -602,7 +592,7 @@ Rust.
 | W1 | ~~Rust's path-parameter regex is `\{(\w+)\}` (word characters only), while Python/TypeScript use `\{[^}]+\}`~~ — **see correction below** | ~~OpenAPI permits `{item-id}` and `{id:int}`. On Rust these are not recognised as path parameters, so the value is sent as a query argument~~ — see correction |
 | W2 | Rust accepts only `GET`/`POST`/`PUT`/`PATCH`/`DELETE` and errors on anything else | `HEAD`, `OPTIONS`, and `TRACE` operations scan fine but fail at execution on Rust only |
 | W3 | Rust reads `metadata` only; Python/TypeScript also honour top-level `http_method`/`url_path` attributes, and TypeScript additionally accepts camelCase `metadata.httpMethod`/`metadata.urlPath` | Not triggered by this scanner (it writes snake_case metadata, the intersection all three read) — documented as intentional in `output-writers.md` rather than reconciled |
-| W4 | Rust does not reject an absolute URL in `url_path`; Python/TypeScript do | A spec whose path is an absolute URL yields a malformed concatenated URL on Rust instead of a failed `WriteResult` — not yet fixed, tracked separately |
+| W4 | The legacy Rust writer accepts an absolute `url_path` | The [effective OpenAPI writer](output-writers.md#effective-openapi-forwarding) rejects absolute paths consistently across SDKs |
 
 !!! success "W1 and W2 fixed in `apcore-toolkit-rust` — W1 diagnosis corrected"
     Re-verifying against the actual code during implementation found the W1
@@ -621,7 +611,50 @@ Rust.
     regex literal. W2 was confirmed exactly as described (HEAD/OPTIONS/
     TRACE rejected before any network call) and fixed by adding the three
     missing method-match arms. Both fixes shipped with regression tests.
-    W4 remains open — out of scope for this proposal, filed separately.
+    W4 remains a limitation of the legacy Rust route reader. The effective
+    OpenAPI path has its own shared validation contract.
+
+## Effective Parameter Scanning
+
+The 0.15.0 SDK contract combines the effective scanner with the toolkit's
+[proxy diagnostics and preflight](output-writers.md#effective-proxy-diagnostics).
+The scanner accepts the same options and transformation hooks as `scan()`.
+
+| SDK | Entry point |
+|---|---|
+| Python | `OpenAPIScanner().scan_with_effective_parameters(spec, **options)` |
+| TypeScript | `new OpenAPIScanner().scanWithEffectiveParameters(spec, options)` |
+| Rust | `OpenAPIScanner::new().scan_with_effective_parameters(&spec, &options).await` |
+
+The scanner resolves same-document Parameter Object references, collects Path
+Item parameters, then applies operation-level overrides by `(name, in)`.
+Path and query declarations and the named properties of a supported JSON
+request body form the flat input schema. The effective schema resolver
+preserves boolean schemas and applies both the referenced schema and its
+sibling assertions. See [Schema extraction modes](openapi.md#schema-extraction-modes).
+
+The operation hook runs before parameter resolution. The module hook and
+selection filters run in their [usual order](#invocation-order). Call the
+preflight on the final modules so an excluded operation cannot block import.
+Change parameter declarations in the operation hook to regenerate both the
+input schema and its routing metadata together.
+
+The same resolved inputs that produce `input_schema` also produce
+`metadata.openapi.proxy_inputs`.
+
+| Field | Meaning |
+|---|---|
+| `path` | Effective path parameter names |
+| `query` | Effective query parameter names |
+| `body` | Names of JSON body properties exposed as tool inputs |
+| `problems` | Operation-local findings, including reference failures, duplicate parameters and unsupported input encodings |
+| `required_json_body` | Optional marker emitted as `true` for a supported required JSON body |
+
+The scanner keeps affected operations in the result so callers can report or
+filter them. The preflight turns findings in a selected set into an error
+before the caller invokes the writer. External reference identifiers are
+redacted to `<external-ref>` in effective findings and warnings. Local
+pointers remain available for troubleshooting.
 
 ## Annotations
 
@@ -668,11 +701,11 @@ fall out of existing pieces; neither needs new machinery beyond the scanner.
 
 ### Dynamic mode (runtime)
 
-Load the spec, scan it, register the modules. The CLI's command surface
-reflects whatever the API currently advertises.
+Load the spec, scan for effective parameters and preflight the selection
+before registering it. The exposed modules reflect the current API document.
 
 ```
-load_spec(url) → scan() → HTTPProxyRegistryWriter.write() → Registry
+load_spec(url) → effective scan → select modules → proxy preflight → HTTPProxyRegistryWriter.write() → Registry
 ```
 
 Cost: one spec fetch and parse per process start. Benefit: zero redeploy when
@@ -683,9 +716,12 @@ the API changes.
 Scan once during the build, persist to `.binding.yaml`, load that at runtime.
 
 ```
-build:    load_spec(url) → scan() → YAMLWriter.write() → api.binding.yaml
-runtime:  BindingLoader.load("api.binding.yaml") → HTTPProxyRegistryWriter.write()
+build:    load_spec(url) → effective scan → YAMLWriter.write() → api.binding.yaml
+runtime:  BindingLoader.load("api.binding.yaml") → select modules → proxy preflight → HTTPProxyRegistryWriter.write()
 ```
+
+Regenerate bindings produced by the legacy scanner before using them with
+effective preflight so the persisted modules carry the proxy input metadata.
 
 Cost: a re-sync step when the API changes. Benefit: no network dependency and
 no parse cost at startup, plus the generated bindings are reviewable artifacts
@@ -706,18 +742,26 @@ and they meet at exactly one point: `HTTPProxyRegistryWriter`'s existing
 `auth_header_factory` hook.
 
 ```python
+from apcore_toolkit import (
+    HTTPProxyRegistryWriter,
+    OpenAPIScanner,
+    load_spec,
+    validate_effective_proxy_modules,
+)
+
 # 1. Credentials  (device-auth.md proposal)
 tokens = DeviceAuthClient(config).login(on_user_code=cli_prompt)
 
 # 2. Modules      (this proposal)
 spec    = load_spec("https://api.example.com/openapi.json")
-modules = OpenAPIScanner().scan(spec)
+modules = OpenAPIScanner().scan_with_effective_parameters(spec)
 
 # 3. Execution    (both — already shipped)
 writer = HTTPProxyRegistryWriter(
     base_url="https://api.example.com",
     auth_header_factory=tokens.as_auth_header_factory(),
 )
+validate_effective_proxy_modules(modules)
 writer.write(modules, registry)
 ```
 
@@ -822,12 +866,9 @@ Only these keys in a path item are treated as operations, matching the OpenAPI
 
 `get`, `put`, `post`, `delete`, `options`, `head`, `patch`, `trace`
 
-The scanner recognises all eight, because scanning is about faithfully
-describing the API. Note that only five of them are currently *executable*
-through the Rust proxy writer — see defect W2 in
-[Blocking prerequisites](#blocking-prerequisites-in-the-shipped-writers).
-Scanning them anyway is correct: a `HEAD` operation is a real part of the API
-surface and belongs in the module list even on an SDK that cannot yet proxy it.
+The scanner recognises all eight because each can be declared in the API
+document. The [effective proxy preflight](output-writers.md#effective-proxy-diagnostics)
+reports `TRACE` as unsupported across the default transports.
 
 Iteration order MUST be the document's own key order (not this list's order,
 and not alphabetical) so that `deduplicate_ids` suffix assignment is
@@ -907,11 +948,11 @@ warning names that same ID — including a `_2` suffix.
 | **Billion-laughs / deeply nested `$ref`** | Already bounded by the shipped depth limit of 16 (see [`deep_resolve_refs`](openapi.md#contract-deep_resolve_refs)). |
 | **Circular `$ref`** | Same depth limit; terminates rather than hanging. |
 | **Prototype pollution (TypeScript)** | Already handled by the shipped `safe-keys` guard in `resolve_ref` (blocks `__proto__`, `constructor`, `prototype`). Inherited at no cost. |
+| **Spec-driven credential leakage** | The scanner excludes `securitySchemes`, `servers[].variables` defaults, and examples from metadata. The effective scanner redacts external reference identifiers in findings and warnings. |
+| **Enormous specs** | A spec with tens of thousands of operations produces a module per operation. Consumers can apply `include`/`exclude` filters. |
 
 !!! note "This guard is a known, intentional TS-only source of cross-SDK output divergence"
     Because the guard blocks `$ref` path segments and schema/parameter keys literally named `__proto__`, `constructor`, or `prototype`, a spec using one of those names (valid JSON, if unusual) produces a *different* `scan()` result in TypeScript (the field is dropped, with a warning) than in Python or Rust (the field is resolved/kept normally, since neither language is vulnerable to the underlying attack). This is out of scope for the byte-identical conformance corpus below — no fixture exercises a `__proto__`-named schema key — and is not a bug to reconcile: the vulnerability class this guard defends against is JS-runtime-specific.
-| **Spec-driven credential leakage** | The scanner MUST NOT copy `securitySchemes`, `servers[].variables` defaults, or any `example` value containing credentials into `metadata`. Only the fields enumerated in [Execution Contract](#execution-contract-metadata-keys) are emitted. |
-| **Enormous specs** | A spec with tens of thousands of operations produces a module per operation. No limit is imposed in V1, but consumers should apply `include`/`exclude` filters. Noted in [Risks](#risks). |
 
 ## Conformance Corpus
 
@@ -1113,8 +1154,10 @@ there.
 
 ### Phase 3 — Consumers (separate PRs, per repo)
 
-- `apcore-cli-*`: an `--from-openapi <url|path>` entry point that runs the
-  scanner and registers via `HTTPProxyRegistryWriter`. No toolkit change.
+- `apcore-cli` uses effective scanning for `apcli openapi scan` and
+  `generate` and reports the shared proxy diagnostics.
+- The standalone OpenAPI backends in `apcore-mcp` and `apcore-a2a`
+  preflight their effective selections before registration.
 - Framework adapters (`fastapi-apcore`, `django-apcore`, …) may optionally
   offer OpenAPI-based scanning as an alternative to code introspection for
   routes whose handlers cannot be imported.
@@ -1170,7 +1213,7 @@ there.
 |---|---|---|
 | Rust defect W1 makes `{item-id}`-style parameters silently produce wrong requests | **High** (any spec using a hyphenated path parameter) | Phase 1 item 2 fixes it before the scanner can reach it. This is the single most dangerous interaction, because it fails silently rather than loudly. |
 | Rust defect W2 makes `HEAD`/`OPTIONS`/`TRACE` operations unexecutable | Medium | Phase 1 item 2. Scanning them is still correct; only proxy execution is affected, and only on Rust. |
-| A `POST` operation declaring query parameters has them sent in the body | Medium | Limitation of the shipped writer's method-driven partitioning, not fixable from the scanner. Documented in [Execution Contract](#execution-contract-metadata-keys); a writer-side fix would need explicit parameter-location metadata and is out of scope here. |
+| A legacy import sends `POST` query inputs as body fields | Medium | Use the [effective preflight](output-writers.md#effective-proxy-diagnostics) to reject selected operations whose input locations conflict with the writer's method-based routing. |
 | Lowercase `http_method` reaching the writer | Low (spec mandates uppercasing) | Conformance fixture `openapi_scan_008` asserts the emitted method is uppercase. |
 | `module_id` derivation diverges across SDKs despite the spec | Medium | 33-case conformance corpus, with the derivation as its primary subject; case 025 pins the word-boundary regexes where engines are most likely to disagree. This is exactly the failure the corpus mechanism exists to catch. |
 | Real-world specs violate assumptions in ways not covered by fixtures | Medium | Degrade-with-warning error model means unknown shapes produce imperfect modules, never crashes. Add fixtures as real specs surface problems. |

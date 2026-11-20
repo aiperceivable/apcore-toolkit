@@ -308,34 +308,26 @@ The writer reads the route to call from **`ScannedModule.metadata`**, never
 from `target` (`target` is a human-readable descriptor, not a callable
 reference, for a module representing a remote endpoint — see
 [`scanning.md`](scanning.md#contract-scannedmodule)). Any scanner producing
-modules for this writer — the [OpenAPI Scanner](openapi-scanner.md) included
-— MUST emit exactly these two flat, snake_case keys:
+modules for this writer, including the [OpenAPI Scanner](openapi-scanner.md),
+should emit the following flat, snake_case route keys.
 
 | `metadata` key | Value | Example |
 |---|---|---|
 | `http_method` | **Uppercase** HTTP method | `"GET"` |
 | `url_path` | Path template, `{param}` braces retained, leading slash | `"/users/{user_id}"` |
 
-!!! danger "Uppercase is mandatory, not cosmetic"
-    Getting either key absent or wrongly cased is not a soft failure: the
-    writer silently falls back to `"GET"` and `"/"` when the keys are
-    missing, and every scanned module quietly proxies to the API root. The
-    Rust writer additionally matches the method against exact uppercase
-    literals and rejects a lowercase value outright (`Unsupported HTTP
-    method: post`); the Python writer compares case-sensitively when
-    deciding whether a request carries a body, so a lowercase `"post"`
-    would silently send its arguments as a **query string** instead of a
-    JSON body. Only the TypeScript writer upper-cases defensively.
+!!! warning "Legacy route defaults and casing"
+    A legacy module can fall back to `"GET"` or `"/"` when route metadata
+    is absent. The Rust writer matches uppercase methods. The Python
+    writer uses uppercase methods to select the body encoding. TypeScript
+    uppercases the configured method. The effective preflight reports
+    unavailable route fields before registration.
 
-**Body vs. query is method-driven, not schema-driven.** The writer
-extracts path-parameter names from `url_path` itself (it does not read a
-separate parameter list), removes those from the remaining inputs, and
-sends the rest as a JSON body for `POST` / `PUT` / `PATCH` or as a query
-string for every other method (`GET`, `DELETE`, `HEAD`, `OPTIONS`). A
-scanner cannot override this by emitting additional metadata — see
-[OpenAPI Scanner § Execution Contract](openapi-scanner.md#execution-contract-metadata-keys)
-for the one real limitation this creates (a query parameter declared on a
-`POST` operation is still sent in the body).
+The writer extracts path-parameter names from `url_path` and removes
+them from the remaining inputs. It sends the remaining inputs as a JSON
+body for `POST`, `PUT` and `PATCH`, and as query parameters for
+`GET`, `DELETE`, `HEAD` and `OPTIONS`. The effective preflight checks
+whether the selected operation fits this method-based partition.
 
 !!! note "Cross-SDK reader asymmetry (documented, not yet reconciled)"
     Rust reads `metadata` only. Python and TypeScript also honour top-level
@@ -347,11 +339,85 @@ for the one real limitation this creates (a query parameter declared on a
     three readers honour — but the asymmetry itself is worth knowing before
     assuming "documented for one SDK" means "true for all three".
 
+### Effective OpenAPI Forwarding
+
+Modules from [effective parameter scanning](openapi-scanner.md#effective-parameter-scanning)
+carry `metadata.openapi.proxy_inputs`. Their route must be origin-relative,
+start with a single slash and contain no literal query or fragment delimiters
+or backslashes. Placeholders use balanced braces and have nonempty names.
+The writer substitutes only these placeholders and URL-encodes their scalar
+values, so `a/b` becomes `a%2Fb`. Colons in effective paths remain literal.
+Legacy modules continue to support brace and colon placeholders.
+
+The portable proxy supports simple scalar path parameters, scalar query
+parameters and default exploded form arrays of scalars. An exploded array
+uses repeated query keys. The preflight rejects unsupported path and query
+encodings, query inputs on body methods, and JSON body inputs on query
+methods. It also reports name collisions between path, query and body
+inputs and mismatches between the route, the published schema and the
+input metadata. Header and cookie declarations are outside this tool
+input contract. Request headers can be supplied through the writer's
+header configuration.
+
+The effective scanner resolves same-document Request Body Objects and
+uses the exact `application/json` media type. The portable body shape is a
+flat object with named properties. The writer sends a representable required
+JSON body even when the caller supplies no fields, using `{}` when all
+properties are optional. `TRACE` is outside the portable proxy contract
+because the default TypeScript Fetch transport rejects it.
+
+### Effective Proxy Diagnostics
+
+Call the toolkit validator on the final selected modules before calling
+`HTTPProxyRegistryWriter.write`. Importers can use the detector to report all
+findings without registering anything. Neither API makes HTTP requests.
+The writer still reports individual registration failures in its
+`WriteResult` values.
+
+| SDK | Detector | Validator | Wire conversion |
+|---|---|---|---|
+| Python | `detect_effective_proxy_hazards(modules)` | `validate_effective_proxy_modules(modules)` raises `ValueError` when findings exist | `hazard.to_dict()` |
+| TypeScript | `detectEffectiveProxyHazards(modules)` | `validateEffectiveProxyModules(modules)` throws `Error` when findings exist | `effectiveHazardToWire(hazard)` |
+| Rust | `detect_effective_proxy_hazards(&modules)` | `validate_effective_proxy_modules(&modules)` returns `Result<(), EffectiveProxyValidationError>` | Serialize with Serde |
+
+Rust exports the detector, validator and typed error with the `http-proxy`
+feature, which is enabled by default. The error exposes its findings in
+`hazards`.
+
+Each serialized finding has `module_id`, `http_method`, `url_path` and
+`kind`. The outer method and path contain the selected route values, with
+`?` for an unavailable value. `kind.code` selects the remaining fields.
+
+| `kind.code` | Additional fields on `kind` |
+|---|---|
+| `missing_effective_inputs` | None |
+| `invalid_effective_inputs` | `detail` |
+| `missing_route_metadata` | `key` (`http_method` or `url_path`) |
+| `unsupported_http_method` | `method` |
+| `parameter_resolution` | `problem` |
+| `query_on_body_method` | `parameters` |
+| `body_on_query_method` | `properties` |
+| `name_collision` | `name`, `locations` in path, query, body order |
+| `path_template_mismatch` | `undeclared`, `unused` |
+| `input_schema_mismatch` | `unlocated`, `unpublished` |
+
+Each `problem` has `kind` and `scope` (`path_item` or `operation`).
+`invalid_list` has no additional fields. `invalid_parameter` adds `index`,
+`reference` adds `index`, `reference` and `reason`, and `duplicate` adds
+`name` and `location`. An external reference is displayed as
+`<external-ref>`.
+
+An `unsupported_input` has operation scope and includes `location`,
+`name` and `reason`. Path and query issues use the parameter name and
+`path_serialization` or `query_serialization`. Body issues use
+`requestBody` and one of `request_body_reference`,
+`request_body_media_type` or `request_body_schema`.
+
 ## Contract: HTTPProxyRegistryWriter.write
 
 ### Inputs
 - `modules`: list of `ScannedModule`, required
-- `registry`: `apcore.Registry` (Python) / `Registry` (TypeScript, from `apcore-js`) / `&mut apcore::Registry` (Rust), required — the live registry to register HTTP proxy modules into
+- `registry`: `apcore.Registry` (Python) / `Registry` (TypeScript, from `apcore-js`) / `&apcore::Registry` (Rust), required — the live registry to register HTTP proxy modules into
 
 ### Errors
 - None raised. Per-module failures (registry rejection, target validation, proxy-class build error) are captured into a failed `WriteResult` (Python: `verified=False, verification_error=...`; TypeScript: `createWriteResult(..., false, msg)`; Rust: `WriteResult::failed(...)`) and returned in the result list, so one failing module does not abort the batch. HTTP requests themselves are issued later, at module call-time — not during `write`. Callers should iterate the returned list and check each entry's `verified` field.
